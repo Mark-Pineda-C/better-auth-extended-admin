@@ -1,7 +1,7 @@
 export {
-    adminAc,
-    defaultAc,
-    defaultRoles,
-    defaultStatements,
-    userAc,
+  adminAc,
+  defaultAc,
+  defaultRoles,
+  defaultStatements,
+  userAc,
 } from "./statement";

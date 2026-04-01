@@ -9,443 +9,443 @@ import * as z from "zod";
 const DEFAULT_MAX_ROLES = Number.POSITIVE_INFINITY;
 
 function normalizeRoleName(name: string): string {
-    return name.toLowerCase().trim();
+  return name.toLowerCase().trim();
 }
 
 async function checkRoleNameConflictsWithStatic(
-    roleName: string,
-    opts: AdminOptions,
-    ctx: Parameters<typeof hasPermission>[1],
+  roleName: string,
+  opts: AdminOptions,
+  ctx: Parameters<typeof hasPermission>[1],
 ): Promise<void> {
-    const staticRoleNames = opts.roles
-        ? Object.keys(opts.roles)
-        : ["admin", "user"];
+  const staticRoleNames = opts.roles
+    ? Object.keys(opts.roles)
+    : ["admin", "user"];
 
-    if (staticRoleNames.includes(roleName)) {
-        ctx?.context.logger.error(
-            `[ExtendedAdmin] Role name "${roleName}" conflicts with a pre-defined static role.`,
-        );
-        throw APIError.from(
-            "BAD_REQUEST",
-            ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-        );
-    }
+  if (staticRoleNames.includes(roleName)) {
+    ctx?.context.logger.error(
+      `[ExtendedAdmin] Role name "${roleName}" conflicts with a pre-defined static role.`,
+    );
+    throw APIError.from(
+      "BAD_REQUEST",
+      ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+    );
+  }
 }
 
 async function checkRoleNameConflictsWithDB(
-    roleName: string,
-    ctx: NonNullable<Parameters<typeof hasPermission>[1]>,
+  roleName: string,
+  ctx: NonNullable<Parameters<typeof hasPermission>[1]>,
 ): Promise<void> {
-    const existing = await ctx.context.adapter.findOne({
-        model: "globalRole",
-        where: [{ field: "name", value: roleName, operator: "eq" }],
-    });
+  const existing = await ctx.context.adapter.findOne({
+    model: "globalRole",
+    where: [{ field: "name", value: roleName, operator: "eq" }],
+  });
 
-    if (existing) {
-        throw APIError.from(
-            "BAD_REQUEST",
-            ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-        );
-    }
+  if (existing) {
+    throw APIError.from(
+      "BAD_REQUEST",
+      ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+    );
+  }
 }
 
 async function checkForInvalidResources(
-    permission: Record<string, string[]>,
-    opts: AdminOptions,
-    ctx: NonNullable<Parameters<typeof hasPermission>[1]>,
+  permission: Record<string, string[]>,
+  opts: AdminOptions,
+  ctx: NonNullable<Parameters<typeof hasPermission>[1]>,
 ): Promise<void> {
-    if (!opts.ac) return;
+  if (!opts.ac) return;
 
-    const validResources = Object.keys(opts.ac.statements);
-    const provided = Object.keys(permission);
-    const invalid = provided.filter((r) => !validResources.includes(r));
+  const validResources = Object.keys(opts.ac.statements);
+  const provided = Object.keys(permission);
+  const invalid = provided.filter((r) => !validResources.includes(r));
 
-    if (invalid.length > 0) {
-        ctx.context.logger.error(
-            `[ExtendedAdmin] Invalid resources in permission set: ${invalid.join(", ")}`,
-        );
-        throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_RESOURCE);
-    }
+  if (invalid.length > 0) {
+    ctx.context.logger.error(
+      `[ExtendedAdmin] Invalid resources in permission set: ${invalid.join(", ")}`,
+    );
+    throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_RESOURCE);
+  }
 }
 
 // ─── create-role ─────────────────────────────────────────────────────────────
 
 const createRoleBodySchema = z.object({
-    name: z.string().min(1),
-    permissions: z.record(z.string(), z.array(z.string())),
-    description: z.string().optional(),
+  name: z.string().min(1),
+  permissions: z.record(z.string(), z.array(z.string())),
+  description: z.string().optional(),
 });
 
 export const createRole = (opts: AdminOptions) =>
-    createAuthEndpoint(
-        "/admin/create-role",
-        {
-            method: "POST",
-            body: createRoleBodySchema,
-            requireHeaders: true,
-            use: [adminMiddleware],
+  createAuthEndpoint(
+    "/admin/create-role",
+    {
+      method: "POST",
+      body: createRoleBodySchema,
+      requireHeaders: true,
+      use: [adminMiddleware],
+    },
+    async (ctx) => {
+      if (!opts.ac) {
+        throw APIError.from(
+          "NOT_IMPLEMENTED",
+          ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
+        );
+      }
+
+      const sessionUser = ctx.context.session.user as import("../types").UserWithRole;
+      if (
+        !await hasPermission(
+          {
+            userId: sessionUser.id,
+            role: sessionUser.role,
+            options: opts,
+            permissions: { role: ["create"] },
+          },
+          ctx,
+        )
+      ) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+        );
+      }
+
+      const body = ctx.body as z.infer<typeof createRoleBodySchema>;
+      const roleName = normalizeRoleName(body.name);
+      await checkRoleNameConflictsWithStatic(roleName, opts, ctx);
+      await checkRoleNameConflictsWithDB(roleName, ctx);
+      await checkForInvalidResources(body.permissions, opts, ctx);
+
+      const maxRoles =
+        typeof opts.dynamicRoles?.maximumRoles === "number"
+          ? opts.dynamicRoles.maximumRoles
+          : DEFAULT_MAX_ROLES;
+
+      const currentCount = await ctx.context.adapter.count({
+        model: "globalRole",
+        where: [],
+      });
+
+      if (currentCount >= maxRoles) {
+        throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.TOO_MANY_ROLES);
+      }
+
+      const now = new Date();
+      const created = await ctx.context.adapter.create({
+        model: "globalRole",
+        data: {
+          name: roleName,
+          permissions: JSON.stringify(body.permissions),
+          description: body.description ?? null,
+          createdAt: now,
+          updatedAt: now,
         },
-        async (ctx) => {
-            if (!opts.ac) {
-                throw APIError.from(
-                    "NOT_IMPLEMENTED",
-                    ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
-                );
-            }
+      });
 
-            const sessionUser = ctx.context.session.user as import("../types").UserWithRole;
-            if (
-                !await hasPermission(
-                    {
-                        userId: sessionUser.id,
-                        role: sessionUser.role,
-                        options: opts,
-                        permissions: { role: ["create"] },
-                    },
-                    ctx,
-                )
-            ) {
-                throw APIError.from(
-                    "FORBIDDEN",
-                    ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
-                );
-            }
+      invalidateRoleCache();
 
-            const body = ctx.body as z.infer<typeof createRoleBodySchema>;
-            const roleName = normalizeRoleName(body.name);
-            await checkRoleNameConflictsWithStatic(roleName, opts, ctx);
-            await checkRoleNameConflictsWithDB(roleName, ctx);
-            await checkForInvalidResources(body.permissions, opts, ctx);
-
-            const maxRoles =
-                typeof opts.dynamicRoles?.maximumRoles === "number"
-                    ? opts.dynamicRoles.maximumRoles
-                    : DEFAULT_MAX_ROLES;
-
-            const currentCount = await ctx.context.adapter.count({
-                model: "globalRole",
-                where: [],
-            });
-
-            if (currentCount >= maxRoles) {
-                throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.TOO_MANY_ROLES);
-            }
-
-            const now = new Date();
-            const created = await ctx.context.adapter.create({
-                model: "globalRole",
-                data: {
-                    name: roleName,
-                    permissions: JSON.stringify(body.permissions),
-                    description: body.description ?? null,
-                    createdAt: now,
-                    updatedAt: now,
-                },
-            });
-
-            invalidateRoleCache();
-
-            return ctx.json({
-                success: true,
-                role: {
-                    ...created,
-                    permissions: body.permissions,
-                },
-            });
+      return ctx.json({
+        success: true,
+        role: {
+          ...created,
+          permissions: body.permissions,
         },
-    );
+      });
+    },
+  );
 
 // ─── update-role ─────────────────────────────────────────────────────────────
 
 const updateRoleBodySchema = z.object({
-    name: z.string().min(1),
-    data: z.object({
-        permissions: z.record(z.string(), z.array(z.string())).optional(),
-        description: z.string().optional(),
-        newName: z.string().optional(),
-    }),
+  name: z.string().min(1),
+  data: z.object({
+    permissions: z.record(z.string(), z.array(z.string())).optional(),
+    description: z.string().optional(),
+    newName: z.string().optional(),
+  }),
 });
 
 export const updateRole = (opts: AdminOptions) =>
-    createAuthEndpoint(
-        "/admin/update-role",
-        {
-            method: "POST",
-            body: updateRoleBodySchema,
-            requireHeaders: true,
-            use: [adminMiddleware],
+  createAuthEndpoint(
+    "/admin/update-role",
+    {
+      method: "POST",
+      body: updateRoleBodySchema,
+      requireHeaders: true,
+      use: [adminMiddleware],
+    },
+    async (ctx) => {
+      if (!opts.ac) {
+        throw APIError.from(
+          "NOT_IMPLEMENTED",
+          ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
+        );
+      }
+
+      const sessionUser = ctx.context.session.user as import("../types").UserWithRole;
+      if (
+        !await hasPermission(
+          {
+            userId: sessionUser.id,
+            role: sessionUser.role,
+            options: opts,
+            permissions: { role: ["update"] },
+          },
+          ctx,
+        )
+      ) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+        );
+      }
+
+      const body = ctx.body as z.infer<typeof updateRoleBodySchema>;
+      const roleName = normalizeRoleName(body.name);
+
+      const existing = (await ctx.context.adapter.findOne({
+        model: "globalRole",
+        where: [{ field: "name", value: roleName, operator: "eq" }],
+      })) as { name: string; permissions: string; description: string | null } | null;
+
+      if (!existing) {
+        throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
+      }
+
+      const updateData: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (body.data.permissions !== undefined) {
+        await checkForInvalidResources(body.data.permissions, opts, ctx);
+        updateData.permissions = JSON.stringify(body.data.permissions);
+      }
+
+      if (body.data.description !== undefined) {
+        updateData.description = body.data.description;
+      }
+
+      if (body.data.newName !== undefined) {
+        const newName = normalizeRoleName(body.data.newName);
+        await checkRoleNameConflictsWithStatic(newName, opts, ctx);
+        await checkRoleNameConflictsWithDB(newName, ctx);
+        updateData.name = newName;
+      }
+
+      await ctx.context.adapter.update({
+        model: "globalRole",
+        where: [{ field: "name", value: roleName, operator: "eq" }],
+        update: updateData,
+      });
+
+      invalidateRoleCache();
+
+      const updatedPermissions =
+        body.data.permissions !== undefined
+          ? body.data.permissions
+          : (JSON.parse(existing.permissions) as Record<string, string[]>);
+
+      return ctx.json({
+        success: true,
+        role: {
+          name: (updateData.name as string | undefined) ?? roleName,
+          permissions: updatedPermissions,
+          description:
+            (updateData.description as string | undefined) ??
+            existing.description,
         },
-        async (ctx) => {
-            if (!opts.ac) {
-                throw APIError.from(
-                    "NOT_IMPLEMENTED",
-                    ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
-                );
-            }
-
-            const sessionUser = ctx.context.session.user as import("../types").UserWithRole;
-            if (
-                !await hasPermission(
-                    {
-                        userId: sessionUser.id,
-                        role: sessionUser.role,
-                        options: opts,
-                        permissions: { role: ["update"] },
-                    },
-                    ctx,
-                )
-            ) {
-                throw APIError.from(
-                    "FORBIDDEN",
-                    ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
-                );
-            }
-
-            const body = ctx.body as z.infer<typeof updateRoleBodySchema>;
-            const roleName = normalizeRoleName(body.name);
-
-            const existing = (await ctx.context.adapter.findOne({
-                model: "globalRole",
-                where: [{ field: "name", value: roleName, operator: "eq" }],
-            })) as { name: string; permissions: string; description: string | null } | null;
-
-            if (!existing) {
-                throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
-            }
-
-            const updateData: Record<string, unknown> = {
-                updatedAt: new Date(),
-            };
-
-            if (body.data.permissions !== undefined) {
-                await checkForInvalidResources(body.data.permissions, opts, ctx);
-                updateData.permissions = JSON.stringify(body.data.permissions);
-            }
-
-            if (body.data.description !== undefined) {
-                updateData.description = body.data.description;
-            }
-
-            if (body.data.newName !== undefined) {
-                const newName = normalizeRoleName(body.data.newName);
-                await checkRoleNameConflictsWithStatic(newName, opts, ctx);
-                await checkRoleNameConflictsWithDB(newName, ctx);
-                updateData.name = newName;
-            }
-
-            await ctx.context.adapter.update({
-                model: "globalRole",
-                where: [{ field: "name", value: roleName, operator: "eq" }],
-                update: updateData,
-            });
-
-            invalidateRoleCache();
-
-            const updatedPermissions =
-                body.data.permissions !== undefined
-                    ? body.data.permissions
-                    : (JSON.parse(existing.permissions) as Record<string, string[]>);
-
-            return ctx.json({
-                success: true,
-                role: {
-                    name: (updateData.name as string | undefined) ?? roleName,
-                    permissions: updatedPermissions,
-                    description:
-                        (updateData.description as string | undefined) ??
-                        existing.description,
-                },
-            });
-        },
-    );
+      });
+    },
+  );
 
 // ─── delete-role ─────────────────────────────────────────────────────────────
 
 export const deleteRole = (opts: AdminOptions) =>
-    createAuthEndpoint(
-        "/admin/delete-role",
-        {
-            method: "POST",
-            body: z.object({ name: z.string().min(1) }),
-            requireHeaders: true,
-            use: [adminMiddleware],
-        },
-        async (ctx) => {
-            if (
-                !await hasPermission(
-                    {
-                        userId: (ctx.context.session.user as import("../types").UserWithRole).id,
-                        role: (ctx.context.session.user as import("../types").UserWithRole).role,
-                        options: opts,
-                        permissions: { role: ["delete"] },
-                    },
-                    ctx,
-                )
-            ) {
-                throw APIError.from(
-                    "FORBIDDEN",
-                    ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
-                );
-            }
+  createAuthEndpoint(
+    "/admin/delete-role",
+    {
+      method: "POST",
+      body: z.object({ name: z.string().min(1) }),
+      requireHeaders: true,
+      use: [adminMiddleware],
+    },
+    async (ctx) => {
+      if (
+        !await hasPermission(
+          {
+            userId: (ctx.context.session.user as import("../types").UserWithRole).id,
+            role: (ctx.context.session.user as import("../types").UserWithRole).role,
+            options: opts,
+            permissions: { role: ["delete"] },
+          },
+          ctx,
+        )
+      ) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+        );
+      }
 
-            const roleName = normalizeRoleName(ctx.body.name);
+      const roleName = normalizeRoleName(ctx.body.name);
 
-            const staticRoleNames = opts.roles
-                ? Object.keys(opts.roles)
-                : ["admin", "user"];
+      const staticRoleNames = opts.roles
+        ? Object.keys(opts.roles)
+        : ["admin", "user"];
 
-            if (staticRoleNames.includes(roleName)) {
-                throw APIError.from(
-                    "BAD_REQUEST",
-                    ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
-                );
-            }
+      if (staticRoleNames.includes(roleName)) {
+        throw APIError.from(
+          "BAD_REQUEST",
+          ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
+        );
+      }
 
-            const existing = await ctx.context.adapter.findOne({
-                model: "globalRole",
-                where: [{ field: "name", value: roleName, operator: "eq" }],
-            });
+      const existing = await ctx.context.adapter.findOne({
+        model: "globalRole",
+        where: [{ field: "name", value: roleName, operator: "eq" }],
+      });
 
-            if (!existing) {
-                throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
-            }
+      if (!existing) {
+        throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
+      }
 
-            // Prevent deletion if any user still holds this role
-            const usersWithRole = await ctx.context.adapter.findMany({
-                model: "user",
-                where: [
-                    {
-                        field: "role",
-                        value: roleName,
-                        operator: "contains",
-                    },
-                ],
-            }) as Array<{ role: string | null }>;
+      // Prevent deletion if any user still holds this role
+      const usersWithRole = await ctx.context.adapter.findMany({
+        model: "user",
+        where: [
+          {
+            field: "role",
+            value: roleName,
+            operator: "contains",
+          },
+        ],
+      }) as Array<{ role: string | null }>;
 
-            const hasAssignedUsers = usersWithRole.some((u) =>
-                (u.role ?? "")
-                    .split(",")
-                    .map((r) => r.trim())
-                    .includes(roleName),
-            );
+      const hasAssignedUsers = usersWithRole.some((u) =>
+        (u.role ?? "")
+          .split(",")
+          .map((r) => r.trim())
+          .includes(roleName),
+      );
 
-            if (hasAssignedUsers) {
-                throw APIError.from(
-                    "BAD_REQUEST",
-                    ADMIN_ERROR_CODES.ROLE_IS_ASSIGNED_TO_USERS,
-                );
-            }
+      if (hasAssignedUsers) {
+        throw APIError.from(
+          "BAD_REQUEST",
+          ADMIN_ERROR_CODES.ROLE_IS_ASSIGNED_TO_USERS,
+        );
+      }
 
-            await ctx.context.adapter.delete({
-                model: "globalRole",
-                where: [{ field: "name", value: roleName, operator: "eq" }],
-            });
+      await ctx.context.adapter.delete({
+        model: "globalRole",
+        where: [{ field: "name", value: roleName, operator: "eq" }],
+      });
 
-            invalidateRoleCache();
+      invalidateRoleCache();
 
-            return ctx.json({ success: true });
-        },
-    );
+      return ctx.json({ success: true });
+    },
+  );
 
 // ─── list-roles ──────────────────────────────────────────────────────────────
 
 export const listRoles = (opts: AdminOptions) =>
-    createAuthEndpoint(
-        "/admin/list-roles",
-        {
-            method: "GET",
-            requireHeaders: true,
-            use: [adminMiddleware],
-        },
-        async (ctx) => {
-            if (
-                !await hasPermission(
-                    {
-                        userId: (ctx.context.session.user as import("../types").UserWithRole).id,
-                        role: (ctx.context.session.user as import("../types").UserWithRole).role,
-                        options: opts,
-                        permissions: { role: ["list"] },
-                    },
-                    ctx,
-                )
-            ) {
-                throw APIError.from(
-                    "FORBIDDEN",
-                    ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_ROLES,
-                );
-            }
+  createAuthEndpoint(
+    "/admin/list-roles",
+    {
+      method: "GET",
+      requireHeaders: true,
+      use: [adminMiddleware],
+    },
+    async (ctx) => {
+      if (
+        !await hasPermission(
+          {
+            userId: (ctx.context.session.user as import("../types").UserWithRole).id,
+            role: (ctx.context.session.user as import("../types").UserWithRole).role,
+            options: opts,
+            permissions: { role: ["list"] },
+          },
+          ctx,
+        )
+      ) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_ROLES,
+        );
+      }
 
-            const dbRoles = (await ctx.context.adapter.findMany({
-                model: "globalRole",
-                where: [],
-            })) as Array<{
-                id: string;
-                name: string;
-                permissions: string;
-                description: string | null;
-                createdAt: Date;
-                updatedAt: Date;
-            }>;
+      const dbRoles = (await ctx.context.adapter.findMany({
+        model: "globalRole",
+        where: [],
+      })) as Array<{
+        id: string;
+        name: string;
+        permissions: string;
+        description: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>;
 
-            return ctx.json(
-                dbRoles.map((r) => ({
-                    ...r,
-                    permissions: JSON.parse(r.permissions) as Record<string, string[]>,
-                })),
-            );
-        },
-    );
+      return ctx.json(
+        dbRoles.map((r) => ({
+          ...r,
+          permissions: JSON.parse(r.permissions) as Record<string, string[]>,
+        })),
+      );
+    },
+  );
 
 // ─── get-role ────────────────────────────────────────────────────────────────
 
 export const getRole = (opts: AdminOptions) =>
-    createAuthEndpoint(
-        "/admin/get-role",
-        {
-            method: "GET",
-            query: z.object({ name: z.string().min(1) }),
-            requireHeaders: true,
-            use: [adminMiddleware],
-        },
-        async (ctx) => {
-            if (
-                !await hasPermission(
-                    {
-                        userId: (ctx.context.session.user as import("../types").UserWithRole).id,
-                        role: (ctx.context.session.user as import("../types").UserWithRole).role,
-                        options: opts,
-                        permissions: { role: ["read"] },
-                    },
-                    ctx,
-                )
-            ) {
-                throw APIError.from(
-                    "FORBIDDEN",
-                    ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE,
-                );
-            }
+  createAuthEndpoint(
+    "/admin/get-role",
+    {
+      method: "GET",
+      query: z.object({ name: z.string().min(1) }),
+      requireHeaders: true,
+      use: [adminMiddleware],
+    },
+    async (ctx) => {
+      if (
+        !await hasPermission(
+          {
+            userId: (ctx.context.session.user as import("../types").UserWithRole).id,
+            role: (ctx.context.session.user as import("../types").UserWithRole).role,
+            options: opts,
+            permissions: { role: ["read"] },
+          },
+          ctx,
+        )
+      ) {
+        throw APIError.from(
+          "FORBIDDEN",
+          ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE,
+        );
+      }
 
-            const roleName = normalizeRoleName(ctx.query.name);
+      const roleName = normalizeRoleName(ctx.query.name);
 
-            const role = (await ctx.context.adapter.findOne({
-                model: "globalRole",
-                where: [{ field: "name", value: roleName, operator: "eq" }],
-            })) as {
-                id: string;
-                name: string;
-                permissions: string;
-                description: string | null;
-                createdAt: Date;
-                updatedAt: Date;
-            } | null;
+      const role = (await ctx.context.adapter.findOne({
+        model: "globalRole",
+        where: [{ field: "name", value: roleName, operator: "eq" }],
+      })) as {
+        id: string;
+        name: string;
+        permissions: string;
+        description: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      } | null;
 
-            if (!role) {
-                throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
-            }
+      if (!role) {
+        throw APIError.from("NOT_FOUND", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
+      }
 
-            return ctx.json({
-                ...role,
-                permissions: JSON.parse(role.permissions) as Record<string, string[]>,
-            });
-        },
-    );
+      return ctx.json({
+        ...role,
+        permissions: JSON.parse(role.permissions) as Record<string, string[]>,
+      });
+    },
+  );

@@ -5,13 +5,14 @@ An extended admin plugin for [better-auth](https://better-auth.com) that builds 
 - **Dynamic role system** — create, update, and delete roles at runtime, stored in the database
 - **User activation / deactivation** — enable or disable accounts independently of the ban system
 - **Role on sign-up** — optionally allow users to specify a role during registration, or set a default sign-up role
+- **Module-based login access control** — restrict which roles can sign in or sign up from each frontend/origin
 
 ---
 
 ## Requirements
 
 - `better-auth` ^1.5.6
-- TypeScript ^5
+- `TypeScript` ^5
 
 ---
 
@@ -170,6 +171,75 @@ await authClient.admin.createUser({
 });
 ```
 
+### 4. Module-based login access control
+
+When your auth backend serves multiple frontends (e.g. an admin panel, a customer portal, an internal tool), you can restrict which roles are allowed to sign in or sign up from each origin.
+
+```ts
+admin({
+  defaultRole: "user",
+  roles: {
+    admin: adminAc,
+    user: userAc,
+    editor: editorAc,
+  },
+  modules: {
+    "admin-panel": {
+      origin: "https://admin.example.com",
+      allowedRoles: ["admin"],
+      denyMessage: "Only administrators can access this panel.",
+    },
+    "customer-portal": {
+      origin: "https://app.example.com",
+      allowedRoles: ["user", "editor"],
+    },
+  },
+})
+```
+
+A user with role `"editor"` trying to sign in from `https://admin.example.com` will receive a `FORBIDDEN` error. From `https://app.example.com`, the same user passes through normally.
+
+**Multiple origins per module** (useful for dev environments):
+
+```ts
+modules: {
+  "admin-panel": {
+    origin: [
+      "https://admin.example.com",
+      "http://localhost:3001",
+    ],
+    allowedRoles: ["admin"],
+  },
+},
+```
+
+**Custom matching** for cases where the origin header is not enough (e.g. same domain, different modules identified by a custom header):
+
+```ts
+modules: {
+  "admin-panel": {
+    match: (request) => request.headers.get("x-app-module") === "admin",
+    allowedRoles: ["admin"],
+  },
+  "customer-portal": {
+    match: (request) => request.headers.get("x-app-module") === "portal",
+    allowedRoles: ["user", "editor"],
+  },
+},
+```
+
+**Unmatched origins** — by default, requests from origins that don't match any module are allowed. Set `moduleUnmatchedBehavior: "deny"` to block them:
+
+```ts
+admin({
+  modules: { /* ... */ },
+  moduleUnmatchedBehavior: "deny",
+  moduleDenyMessage: "Access is not allowed from this origin.",
+})
+```
+
+This feature applies to both **sign-in** and **sign-up**. During sign-up, the role that would be assigned to the new user is checked against the module's `allowedRoles`. If it doesn't match, the registration is blocked before the user is created. Users with multiple roles (comma-separated) are allowed if at least one of their roles is in the module's `allowedRoles`.
+
 ---
 
 ## All endpoints
@@ -220,6 +290,9 @@ await authClient.admin.createUser({
 | `adminUserIds` | `string[]` | — | User IDs that always have admin access |
 | `allowImpersonatingAdmins` | `boolean` | `false` | Allow impersonating other admins *(deprecated)* |
 | `schema` | `InferOptionSchema<AdminSchema>` | — | Override schema field names |
+| `modules` | `Record<string, ModuleConfig>` | — | Module-based login/sign-up access control by origin |
+| `moduleDenyMessage` | `string` | *See code* | Default message when access is denied by module |
+| `moduleUnmatchedBehavior` | `"allow" \| "deny"` | `"allow"` | Behavior when origin matches no module |
 
 ---
 

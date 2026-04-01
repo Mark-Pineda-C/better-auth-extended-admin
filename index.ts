@@ -6,19 +6,20 @@ export { adminClient } from "./src/client";
 
 // Access control utilities
 export {
-    adminAc,
-    defaultAc,
-    defaultRoles,
-    defaultStatements,
-    userAc,
+  adminAc,
+  defaultAc,
+  defaultRoles,
+  defaultStatements,
+  userAc,
 } from "./src/access";
 
 // Types
 export type {
-    AdminOptions,
-    SessionWithImpersonatedBy,
-    UserWithRole,
-    InferAdminRolesFromOption,
+  AdminOptions,
+  ModuleConfig,
+  SessionWithImpersonatedBy,
+  UserWithRole,
+  InferAdminRolesFromOption,
 } from "./src/types";
 
 // Schema
