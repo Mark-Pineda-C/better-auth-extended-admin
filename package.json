@@ -1,14 +1,54 @@
 {
   "name": "better-auth-extended-admin",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "description": "An extended admin plugin for better-auth that adds dynamic role system, user activation / deactivation, role on sign-up, and module-based login access control.",
+  "author": "Mark Pineda",
+  "license": "MIT",
+  "keywords": [
+    "better-auth",
+    "auth",
+    "admin",
+    "plugin",
+    "roles",
+    "rbac",
+    "access-control"
+  ],
   "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "pretest": "bun run typecheck"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "better-auth": "^1.5.6",
+    "tsup": "^8.5.1"
   },
   "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
+    "typescript": "^5",
     "better-auth": "^1.5.6"
   }
 }

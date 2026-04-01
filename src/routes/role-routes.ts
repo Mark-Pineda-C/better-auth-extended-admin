@@ -78,7 +78,7 @@ const createRoleBodySchema = z.object({
 
 export const createRole = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/create-role",
+    "/extended-admin/create-role",
     {
       method: "POST",
       body: createRoleBodySchema,
@@ -168,7 +168,7 @@ const updateRoleBodySchema = z.object({
 
 export const updateRole = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/update-role",
+    "/extended-admin/update-role",
     {
       method: "POST",
       body: updateRoleBodySchema,
@@ -263,7 +263,7 @@ export const updateRole = (opts: AdminOptions) =>
 
 export const deleteRole = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/delete-role",
+    "/extended-admin/delete-role",
     {
       method: "POST",
       body: z.object({ name: z.string().min(1) }),
@@ -351,7 +351,7 @@ export const deleteRole = (opts: AdminOptions) =>
 
 export const listRoles = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/list-roles",
+    "/extended-admin/list-roles",
     {
       method: "GET",
       requireHeaders: true,
@@ -400,7 +400,7 @@ export const listRoles = (opts: AdminOptions) =>
 
 export const getRole = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/get-role",
+    "/extended-admin/get-role",
     {
       method: "GET",
       query: z.object({ name: z.string().min(1) }),

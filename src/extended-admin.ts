@@ -36,8 +36,8 @@ import {
 
 declare module "@better-auth/core" {
   interface BetterAuthPluginRegistry<AuthOptions, Options> {
-    admin: {
-      creator: typeof admin;
+    extendedAdmin: {
+      creator: typeof extendedAdmin;
     };
   }
 }
@@ -128,7 +128,7 @@ function checkModuleAccess(
   };
 }
 
-export const admin = <O extends AdminOptions>(options?: O) => {
+export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
   const opts = {
     ...(options ?? {}),
     defaultRole: options?.defaultRole ?? "user",
@@ -181,18 +181,9 @@ export const admin = <O extends AdminOptions>(options?: O) => {
     } as unknown as typeof schema)
     : schema;
 
-  const dynamicEndpoints = options?.dynamicRoles?.enabled
-    ? {
-      createRole: createRole(opts),
-      updateRole: updateRole(opts),
-      deleteRole: deleteRole(opts),
-      listRoles: listRoles(opts),
-      getRole: getRole(opts),
-    }
-    : {};
 
   return {
-    id: "admin",
+    id: "extended-admin" as const,
 
     init() {
       return {
@@ -342,7 +333,7 @@ export const admin = <O extends AdminOptions>(options?: O) => {
     hooks: {
       after: [
         {
-          matcher(context: { path: string }) {
+          matcher(context: { path?: string }) {
             return context.path === "/list-sessions";
           },
           handler: createAuthMiddleware(async (ctx) => {
@@ -375,7 +366,11 @@ export const admin = <O extends AdminOptions>(options?: O) => {
       removeUser: removeUser(opts),
       setUserPassword: setUserPassword(opts),
       userHasPermission: userHasPermission(opts),
-      ...dynamicEndpoints,
+      createRole: createRole(opts),
+      updateRole: updateRole(opts),
+      deleteRole: deleteRole(opts),
+      listRoles: listRoles(opts),
+      getRole: getRole(opts),
     },
 
     $ERROR_CODES: ADMIN_ERROR_CODES,
@@ -383,5 +378,5 @@ export const admin = <O extends AdminOptions>(options?: O) => {
     schema: mergeSchema(baseSchema, opts.schema),
 
     options,
-  } as const;
+  };
 };

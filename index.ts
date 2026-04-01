@@ -1,8 +1,8 @@
 // Plugin factory
-export { admin } from "./src/admin";
+export { extendedAdmin } from "./src/extended-admin";
 
 // Client plugin
-export { adminClient } from "./src/client";
+export { extendedAdminClient } from "./src/client";
 
 // Access control utilities
 export {

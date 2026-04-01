@@ -36,7 +36,7 @@ const setRoleBodySchema = z.object({
 
 export const setRole = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/set-role",
+    "/extended-admin/set-role",
     {
       method: "POST",
       body: setRoleBodySchema,
@@ -89,7 +89,7 @@ export const setRole = (opts: AdminOptions) =>
 
 export const getUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/get-user",
+    "/extended-admin/get-user",
     {
       method: "GET",
       query: z.object({ id: z.string() }),
@@ -133,7 +133,7 @@ const createUserBodySchema = z.object({
 
 export const createUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/create-user",
+    "/extended-admin/create-user",
     {
       method: "POST",
       body: createUserBodySchema,
@@ -220,7 +220,7 @@ const adminUpdateUserBodySchema = z.object({
 
 export const adminUpdateUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/update-user",
+    "/extended-admin/update-user",
     {
       method: "POST",
       body: adminUpdateUserBodySchema,
@@ -322,7 +322,7 @@ const listUsersQuerySchema = z.object({
 
 export const listUsers = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/list-users",
+    "/extended-admin/list-users",
     {
       method: "GET",
       use: [adminMiddleware],
@@ -393,7 +393,7 @@ export const listUsers = (opts: AdminOptions) =>
 
 export const listUserSessions = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/list-user-sessions",
+    "/extended-admin/list-user-sessions",
     {
       method: "POST",
       use: [adminMiddleware],
@@ -433,7 +433,7 @@ export const listUserSessions = (opts: AdminOptions) =>
 
 export const banUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/ban-user",
+    "/extended-admin/ban-user",
     {
       method: "POST",
       body: z.object({
@@ -493,7 +493,7 @@ export const banUser = (opts: AdminOptions) =>
 
 export const unbanUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/unban-user",
+    "/extended-admin/unban-user",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -532,7 +532,7 @@ export const unbanUser = (opts: AdminOptions) =>
 
 export const enableUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/enable-user",
+    "/extended-admin/enable-user",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -573,7 +573,7 @@ export const enableUser = (opts: AdminOptions) =>
 
 export const disableUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/disable-user",
+    "/extended-admin/disable-user",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -623,7 +623,7 @@ export const disableUser = (opts: AdminOptions) =>
 
 export const impersonateUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/impersonate-user",
+    "/extended-admin/impersonate-user",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -737,7 +737,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 
 export const stopImpersonating = () =>
   createAuthEndpoint(
-    "/admin/stop-impersonating",
+    "/extended-admin/stop-impersonating",
     { method: "POST", requireHeaders: true },
     async (ctx) => {
       const session = await getSessionFromCtx(ctx);
@@ -799,7 +799,7 @@ export const stopImpersonating = () =>
 
 export const revokeUserSession = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/revoke-user-session",
+    "/extended-admin/revoke-user-session",
     {
       method: "POST",
       body: z.object({ sessionToken: z.string() }),
@@ -832,7 +832,7 @@ export const revokeUserSession = (opts: AdminOptions) =>
 
 export const revokeUserSessions = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/revoke-user-sessions",
+    "/extended-admin/revoke-user-sessions",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -865,7 +865,7 @@ export const revokeUserSessions = (opts: AdminOptions) =>
 
 export const removeUser = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/remove-user",
+    "/extended-admin/remove-user",
     {
       method: "POST",
       body: z.object({ userId: z.coerce.string() }),
@@ -909,7 +909,7 @@ export const removeUser = (opts: AdminOptions) =>
 
 export const setUserPassword = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/set-user-password",
+    "/extended-admin/set-user-password",
     {
       method: "POST",
       body: z.object({
@@ -976,7 +976,7 @@ const userHasPermissionBodySchema = z
 
 export const userHasPermission = (opts: AdminOptions) =>
   createAuthEndpoint(
-    "/admin/has-permission",
+    "/extended-admin/has-permission",
     {
       method: "POST",
       body: userHasPermissionBodySchema,

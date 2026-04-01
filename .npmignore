@@ -1,0 +1,6 @@
+src/
+node_modules/
+bun.lock
+tsup.config.ts
+tsconfig.json
+.git/

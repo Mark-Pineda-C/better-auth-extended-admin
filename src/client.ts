@@ -25,7 +25,7 @@ const hasPermissionClient = (
   return false;
 };
 
-export const adminClient = (options?: ClientAdminOptions) => {
+export const extendedAdminClient = (options?: ClientAdminOptions) => {
   const roles: Record<string, Role> = {
     admin: adminAc,
     user: userAc,
@@ -33,14 +33,14 @@ export const adminClient = (options?: ClientAdminOptions) => {
   };
 
   return {
-    id: "admin-client",
-    $InferServerPlugin: {} as ReturnType<typeof import("./admin").admin>,
+    id: "extended-admin-client",
+    $InferServerPlugin: {} as ReturnType<typeof import("./extended-admin").extendedAdmin>,
     getActions: () => ({
-      admin: {
+      extendedAdmin: {
         /**
          * Client-side permission check using static roles only.
          * For dynamic roles defined in the database use the server-side
-         * `/admin/has-permission` endpoint instead.
+         * `/extended-admin/has-permission` endpoint instead.
          */
         checkRolePermission: (data: {
           role: string;
@@ -49,11 +49,11 @@ export const adminClient = (options?: ClientAdminOptions) => {
       },
     }),
     pathMethods: {
-      "/admin/list-users": "GET",
-      "/admin/list-roles": "GET",
-      "/admin/get-role": "GET",
-      "/admin/get-user": "GET",
-      "/admin/stop-impersonating": "POST",
+      "/extended-admin/list-users": "GET",
+      "/extended-admin/list-roles": "GET",
+      "/extended-admin/get-role": "GET",
+      "/extended-admin/get-user": "GET",
+      "/extended-admin/stop-impersonating": "POST",
     } as const,
     $ERROR_CODES: ADMIN_ERROR_CODES,
   };

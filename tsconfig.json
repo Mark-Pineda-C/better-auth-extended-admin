@@ -29,7 +29,10 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "index.ts",
+    "tsup.config.ts",
+    "tests/**/*"
   ],
   "exclude": [
     "node_modules",

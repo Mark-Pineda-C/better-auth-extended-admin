@@ -32,7 +32,7 @@ npm install better-auth-extended-admin
 
 ```ts
 import { betterAuth } from "better-auth";
-import { admin } from "better-auth-extended-admin";
+import { extendedAdmin } from "better-auth-extended-admin";
 import { createAccessControl } from "better-auth/plugins/access";
 
 // 1. (Optional) Define your access control instance for dynamic roles
@@ -44,7 +44,7 @@ const ac = createAccessControl({
 
 export const auth = betterAuth({
   plugins: [
-    admin({
+    extendedAdmin({
       // Default role assigned to new users (default: "user")
       defaultRole: "user",
 
@@ -75,14 +75,14 @@ export const auth = betterAuth({
 
 ```ts
 import { createAuthClient } from "better-auth/client";
-import { adminClient } from "better-auth-extended-admin";
+import { extendedAdminClient } from "better-auth-extended-admin";
 
 export const authClient = createAuthClient({
-  plugins: [adminClient()],
+  plugins: [extendedAdminClient()],
 });
 
 // Client-side permission check (static roles only)
-const canCreate = authClient.admin.checkRolePermission({
+const canCreate = authClient.extendedAdmin.checkRolePermission({
   role: "admin",
   permissions: { user: ["create"] },
 });
@@ -98,7 +98,7 @@ When `dynamicRoles.enabled` is `true`, roles are persisted in the `adminRole` ta
 
 ```ts
 // Create a new role
-await authClient.admin.createRole({
+await authClient.extendedAdmin.createRole({
   name: "moderator",
   permissions: {
     user: ["list", "ban"],
@@ -108,7 +108,7 @@ await authClient.admin.createRole({
 });
 
 // Update a role
-await authClient.admin.updateRole({
+await authClient.extendedAdmin.updateRole({
   name: "moderator",
   data: {
     permissions: { user: ["list", "ban", "get"] },
@@ -116,13 +116,13 @@ await authClient.admin.updateRole({
 });
 
 // Delete a role (fails if any user still has it assigned)
-await authClient.admin.deleteRole({ name: "moderator" });
+await authClient.extendedAdmin.deleteRole({ name: "moderator" });
 
 // List all dynamic roles
-const roles = await authClient.admin.listRoles();
+const roles = await authClient.extendedAdmin.listRoles();
 
 // Get a single role
-const role = await authClient.admin.getRole({ name: "moderator" });
+const role = await authClient.extendedAdmin.getRole({ name: "moderator" });
 ```
 
 Dynamic roles are merged with static roles when checking permissions. A dynamic role with the same name as a static role **extends** its permissions rather than replacing them.
@@ -133,10 +133,10 @@ The `isActive` flag provides a lightweight enable/disable toggle that is separat
 
 ```ts
 // Disable a user (also revokes their active sessions)
-await authClient.admin.disableUser({ userId: "user_123" });
+await authClient.extendedAdmin.disableUser({ userId: "user_123" });
 
 // Re-enable a user
-await authClient.admin.enableUser({ userId: "user_123" });
+await authClient.extendedAdmin.enableUser({ userId: "user_123" });
 ```
 
 **Difference from banning:**
@@ -153,7 +153,7 @@ await authClient.admin.enableUser({ userId: "user_123" });
 By default, the `role` field is blocked from user input. Set `allowRoleOnSignUp: true` to allow it:
 
 ```ts
-admin({
+extendedAdmin({
   allowRoleOnSignUp: true,
   defaultRole: "user",
   defaultRoleForSignUp: "member", // overrides defaultRole for sign-up specifically
@@ -163,7 +163,7 @@ admin({
 You can also create users with a specific role using the admin API:
 
 ```ts
-await authClient.admin.createUser({
+await authClient.extendedAdmin.createUser({
   email: "jane@example.com",
   name: "Jane",
   password: "secret",
@@ -176,7 +176,7 @@ await authClient.admin.createUser({
 When your auth backend serves multiple frontends (e.g. an admin panel, a customer portal, an internal tool), you can restrict which roles are allowed to sign in or sign up from each origin.
 
 ```ts
-admin({
+extendedAdmin({
   defaultRole: "user",
   roles: {
     admin: adminAc,
@@ -231,7 +231,7 @@ modules: {
 **Unmatched origins** — by default, requests from origins that don't match any module are allowed. Set `moduleUnmatchedBehavior: "deny"` to block them:
 
 ```ts
-admin({
+extendedAdmin({
   modules: { /* ... */ },
   moduleUnmatchedBehavior: "deny",
   moduleDenyMessage: "Access is not allowed from this origin.",
@@ -246,28 +246,28 @@ This feature applies to both **sign-in** and **sign-up**. During sign-up, the ro
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/admin/set-role` | Set a user's role |
-| `GET` | `/admin/get-user` | Get a user by ID |
-| `POST` | `/admin/create-user` | Create a new user with optional role |
-| `POST` | `/admin/update-user` | Update user fields |
-| `GET` | `/admin/list-users` | List users with filtering and pagination |
-| `POST` | `/admin/list-user-sessions` | List sessions for a user |
-| `POST` | `/admin/ban-user` | Ban a user |
-| `POST` | `/admin/unban-user` | Remove ban from a user |
-| `POST` | `/admin/enable-user` | Enable a disabled user |
-| `POST` | `/admin/disable-user` | Disable a user |
-| `POST` | `/admin/impersonate-user` | Start impersonating a user |
-| `POST` | `/admin/stop-impersonating` | Stop impersonating |
-| `POST` | `/admin/revoke-user-session` | Revoke a specific session |
-| `POST` | `/admin/revoke-user-sessions` | Revoke all sessions for a user |
-| `POST` | `/admin/remove-user` | Permanently delete a user |
-| `POST` | `/admin/set-user-password` | Set a user's password |
-| `POST` | `/admin/has-permission` | Check if a user has a permission |
-| `POST` | `/admin/create-role` | Create a dynamic role *(requires `dynamicRoles.enabled`)* |
-| `POST` | `/admin/update-role` | Update a dynamic role |
-| `POST` | `/admin/delete-role` | Delete a dynamic role |
-| `GET` | `/admin/list-roles` | List all dynamic roles |
-| `GET` | `/admin/get-role` | Get a dynamic role by name |
+| `POST` | `/extended-admin/set-role` | Set a user's role |
+| `GET` | `/extended-admin/get-user` | Get a user by ID |
+| `POST` | `/extended-admin/create-user` | Create a new user with optional role |
+| `POST` | `/extended-admin/update-user` | Update user fields |
+| `GET` | `/extended-admin/list-users` | List users with filtering and pagination |
+| `POST` | `/extended-admin/list-user-sessions` | List sessions for a user |
+| `POST` | `/extended-admin/ban-user` | Ban a user |
+| `POST` | `/extended-admin/unban-user` | Remove ban from a user |
+| `POST` | `/extended-admin/enable-user` | Enable a disabled user |
+| `POST` | `/extended-admin/disable-user` | Disable a user |
+| `POST` | `/extended-admin/impersonate-user` | Start impersonating a user |
+| `POST` | `/extended-admin/stop-impersonating` | Stop impersonating |
+| `POST` | `/extended-admin/revoke-user-session` | Revoke a specific session |
+| `POST` | `/extended-admin/revoke-user-sessions` | Revoke all sessions for a user |
+| `POST` | `/extended-admin/remove-user` | Permanently delete a user |
+| `POST` | `/extended-admin/set-user-password` | Set a user's password |
+| `POST` | `/extended-admin/has-permission` | Check if a user has a permission |
+| `POST` | `/extended-admin/create-role` | Create a dynamic role *(requires `dynamicRoles.enabled`)* |
+| `POST` | `/extended-admin/update-role` | Update a dynamic role |
+| `POST` | `/extended-admin/delete-role` | Delete a dynamic role |
+| `GET` | `/extended-admin/list-roles` | List all dynamic roles |
+| `GET` | `/extended-admin/get-role` | Get a dynamic role by name |
 
 ---
 
@@ -331,4 +331,4 @@ The plugin adds the following fields and tables to your database:
 
 ## License
 
-MIT
+This project is licensed under the MIT License.
