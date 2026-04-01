@@ -1,0 +1,125 @@
+import type { InferOptionSchema, Session, User } from "better-auth";
+import type { AccessControl, Role } from "better-auth/plugins/access";
+import type { AdminSchema } from "./schema";
+
+export interface UserWithRole extends User {
+    role?: string | undefined;
+    banned: boolean | null;
+    banReason?: (string | null) | undefined;
+    banExpires?: (Date | null) | undefined;
+    isActive: boolean;
+}
+
+export interface SessionWithImpersonatedBy extends Session {
+    impersonatedBy?: string | undefined;
+}
+
+export interface AdminOptions {
+    /**
+     * The default role for a user
+     *
+     * @default "user"
+     */
+    defaultRole?: string | undefined;
+    /**
+     * Roles that are considered admin roles.
+     *
+     * Any user role that isn't in this list, even if they have the permission,
+     * will not be considered an admin.
+     *
+     * @default ["admin"]
+     */
+    adminRoles?: (string | string[]) | undefined;
+    /**
+     * Custom static roles and their permissions.
+     * These are merged with the built-in `admin` and `user` roles.
+     */
+    roles?: Record<string, Role> | undefined;
+    /**
+     * A default ban reason
+     *
+     * By default, no reason is provided
+     */
+    defaultBanReason?: string | undefined;
+    /**
+     * Number of seconds until the ban expires
+     *
+     * By default, the ban never expires
+     */
+    defaultBanExpiresIn?: number | undefined;
+    /**
+     * Duration of the impersonation session in seconds
+     *
+     * By default, the impersonation session lasts 1 hour
+     */
+    impersonationSessionDuration?: number | undefined;
+    /**
+     * Custom schema for the admin plugin
+     */
+    schema?: InferOptionSchema<AdminSchema> | undefined;
+    /**
+     * List of user ids that should have admin access
+     *
+     * If this is set, the `adminRole` option is ignored
+     */
+    adminUserIds?: string[] | undefined;
+    /**
+     * Message to show when a user is banned
+     *
+     * @default "You have been banned from this application. Please contact support if you believe this is an error."
+     */
+    bannedUserMessage?: string | undefined;
+    /**
+     * Message to show when a user account is disabled
+     *
+     * @default "Your account has been disabled. Please contact support."
+     */
+    disabledUserMessage?: string | undefined;
+    /**
+     * Whether to allow impersonating other admins.
+     *
+     * @deprecated Use the `impersonate-admins` permission instead.
+     *
+     * @default false
+     */
+    allowImpersonatingAdmins?: boolean | undefined;
+    /**
+     * Access control instance required for dynamic roles.
+     * Must be provided when `dynamicRoles.enabled` is true.
+     */
+    ac?: AccessControl | undefined;
+    /**
+     * Configuration for the dynamic role system.
+     * Roles stored in the database can be created, updated, and deleted at runtime.
+     */
+    dynamicRoles?: {
+        /**
+         * Enable the dynamic role system.
+         * Requires `ac` to be set.
+         */
+        enabled: boolean;
+        /**
+         * Maximum number of dynamic roles allowed.
+         *
+         * @default Infinity
+         */
+        maximumRoles?: number | undefined;
+    } | undefined;
+    /**
+     * Allow users to specify a role during sign-up.
+     * When enabled, the `role` field is accepted as user input on registration.
+     *
+     * @default false
+     */
+    allowRoleOnSignUp?: boolean | undefined;
+    /**
+     * Default role assigned to users who sign up via the normal sign-up flow.
+     * Falls back to `defaultRole` if not set.
+     */
+    defaultRoleForSignUp?: string | undefined;
+}
+
+export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =
+    O extends { roles: Record<string, unknown> }
+    ? keyof O["roles"]
+    : "user" | "admin";
