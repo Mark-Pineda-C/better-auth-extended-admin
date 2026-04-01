@@ -1,0 +1,4 @@
+node_modules/
+.output/
+.vinxi/
+app/routeTree.gen.ts

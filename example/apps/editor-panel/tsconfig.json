@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "paths": {
+      "@/*": ["./*"],
+      "@server/*": ["../server/src/*"]
+    }
+  },
+  "include": ["app/**/*", "lib/**/*", "app/routeTree.gen.ts"],
+  "exclude": ["node_modules"]
+}
