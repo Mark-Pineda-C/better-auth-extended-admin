@@ -4,14 +4,13 @@
   "workspaces": {
     "": {
       "name": "better-auth-extended-admin",
-      "dependencies": {
-        "better-auth": "^1.5.6",
-      },
       "devDependencies": {
         "@types/bun": "latest",
+        "better-auth": "^1.5.6",
         "tsup": "^8.5.1",
       },
       "peerDependencies": {
+        "better-auth": "^1.5.6",
         "typescript": "^5",
       },
     },

@@ -10,11 +10,12 @@
     "db:studio": "bunx drizzle-kit studio"
   },
   "dependencies": {
+    "@trpc/server": "^11.0.0",
     "better-auth": "^1.5.6",
-    "better-auth-extended-admin": "link:../../../",
+    "better-auth-extended-admin": "link:better-auth-extended-admin",
+    "better-sqlite3": "^12.8.0",
     "drizzle-orm": "^0.39.0",
     "hono": "^4.7.0",
-    "@trpc/server": "^11.0.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
