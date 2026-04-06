@@ -340,4 +340,292 @@ describe("modules — acceso por origen", () => {
     expect(res.error).toBeNull();
     expect(res.data?.user).toBeDefined();
   });
+
+  test("allowedRoles como función síncrona permite al rol correcto", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: (roles) => roles.includes("editor"),
+        },
+      },
+    });
+
+    await instance.signUpUser("fneditor@test.com", "password123", "Fn Editor");
+    const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+    const user = (db["user"] ?? []).find((u) => u["email"] === "fneditor@test.com");
+    if (user) user["role"] = "editor";
+
+    const res = await instance.client.signIn.email({
+      email: "fneditor@test.com",
+      password: "password123",
+      fetchOptions: {
+        headers: { origin: "http://editor.example.com" },
+      },
+    });
+
+    expect(res.error).toBeNull();
+    expect(res.data?.user).toBeDefined();
+  });
+
+  test("allowedRoles como función async permite al rol correcto", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: async (roles) => roles.includes("editor"),
+        },
+      },
+    });
+
+    await instance.signUpUser("asynceditor@test.com", "password123", "Async Editor");
+    const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+    const user = (db["user"] ?? []).find((u) => u["email"] === "asynceditor@test.com");
+    if (user) user["role"] = "editor";
+
+    const res = await instance.client.signIn.email({
+      email: "asynceditor@test.com",
+      password: "password123",
+      fetchOptions: {
+        headers: { origin: "http://editor.example.com" },
+      },
+    });
+
+    expect(res.error).toBeNull();
+    expect(res.data?.user).toBeDefined();
+  });
+
+  test("allowedRoles como función que deniega bloquea con 403", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: () => false,
+        },
+      },
+    });
+
+    await instance.signUpUser("fndeny@test.com", "password123", "Fn Deny");
+    const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+    const user = (db["user"] ?? []).find((u) => u["email"] === "fndeny@test.com");
+    if (user) user["role"] = "editor";
+
+    const res = await instance.client.signIn.email({
+      email: "fndeny@test.com",
+      password: "password123",
+      fetchOptions: {
+        headers: { origin: "http://editor.example.com" },
+      },
+    });
+
+    expect(res.error).not.toBeNull();
+    expect(res.error?.status).toBe(403);
+  });
+});
+
+// ─── modules — enforceModulesOnSession en getSession ──────────────────────────
+
+describe("modules — enforceModulesOnSession en getSession", () => {
+  /**
+   * Signs up a user without an origin (unmatched → allowed), promotes to the
+   * given role in the memory DB, then signs in from `signInOrigin` so the
+   * session cookie is tied to a valid module.
+   */
+  async function createEditorWithSession(
+    instance: ReturnType<typeof createTestInstance>,
+    email: string,
+    signInOrigin: string,
+  ) {
+    await instance.signUpUser(email, "password123", "Editor");
+    const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+    const user = (db["user"] ?? []).find((u) => u["email"] === email);
+    if (user) user["role"] = "editor";
+
+    const { headers } = await instance.signInUser(email, "password123", {
+      origin: signInOrigin,
+    });
+    return headers;
+  }
+
+  test("getSession devuelve null cuando el usuario accede desde un módulo no permitido para su rol", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: ["admin", "editor"],
+        },
+        userPanel: {
+          origin: "http://user.example.com",
+          allowedRoles: ["admin", "user"],
+        },
+      },
+    });
+
+    const headers = await createEditorWithSession(
+      instance, "editor@test.com", "http://editor.example.com",
+    );
+
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: headers.get("cookie") ?? "",
+          origin: "http://user.example.com",
+        },
+      },
+    });
+
+    expect(session.data).toBeNull();
+  });
+
+  test("getSession devuelve sesión válida cuando el usuario accede desde su módulo permitido", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: ["admin", "editor"],
+        },
+        userPanel: {
+          origin: "http://user.example.com",
+          allowedRoles: ["admin", "user"],
+        },
+      },
+    });
+
+    const headers = await createEditorWithSession(
+      instance, "editor2@test.com", "http://editor.example.com",
+    );
+
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: headers.get("cookie") ?? "",
+          origin: "http://editor.example.com",
+        },
+      },
+    });
+
+    expect(session.data?.user).toBeDefined();
+    expect(session.data?.user?.email).toBe("editor2@test.com");
+  });
+
+  test("admin puede acceder a getSession desde cualquier módulo", async () => {
+    const instance = createTestInstance({
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: ["admin", "editor"],
+        },
+        userPanel: {
+          origin: "http://user.example.com",
+          allowedRoles: ["admin", "user"],
+        },
+      },
+    });
+
+    const admin = await instance.createAdminUser();
+
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: admin.headers.get("cookie") ?? "",
+          origin: "http://user.example.com",
+        },
+      },
+    });
+
+    expect(session.data?.user).toBeDefined();
+  });
+
+  test("enforceModulesOnSession: false desactiva la verificación en getSession", async () => {
+    const instance = createTestInstance({
+      enforceModulesOnSession: false,
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: ["admin", "editor"],
+        },
+        userPanel: {
+          origin: "http://user.example.com",
+          allowedRoles: ["admin", "user"],
+        },
+      },
+    });
+
+    const headers = await createEditorWithSession(
+      instance, "editor3@test.com", "http://editor.example.com",
+    );
+
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: headers.get("cookie") ?? "",
+          origin: "http://user.example.com",
+        },
+      },
+    });
+
+    expect(session.data?.user).toBeDefined();
+  });
+
+  test("sin modules configurados, getSession funciona normalmente", async () => {
+    const instance = createTestInstance();
+
+    const { headers } = await instance.signUpUser(
+      "normal@test.com", "password123", "Normal User",
+    );
+
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: headers.get("cookie") ?? "",
+          origin: "http://any-origin.example.com",
+        },
+      },
+    });
+
+    expect(session.data?.user).toBeDefined();
+  });
+
+  test("con moduleUnmatchedBehavior: 'deny', getSession desde origen no registrado devuelve null", async () => {
+    const instance = createTestInstance({
+      moduleUnmatchedBehavior: "deny",
+      modules: {
+        editorPanel: {
+          origin: "http://editor.example.com",
+          allowedRoles: ["admin", "editor"],
+        },
+        userPanel: {
+          origin: "http://user.example.com",
+          allowedRoles: ["admin", "user"],
+        },
+      },
+    });
+
+    // Sign up from userPanel (default role "user" is allowed there)
+    await instance.signUpUser(
+      "denytest@test.com", "password123", "Deny Test",
+      { origin: "http://user.example.com" },
+    );
+    const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+    const user = (db["user"] ?? []).find((u) => u["email"] === "denytest@test.com");
+    if (user) user["role"] = "editor";
+
+    // Sign in from editorPanel (editor role allowed)
+    const { headers } = await instance.signInUser(
+      "denytest@test.com", "password123",
+      { origin: "http://editor.example.com" },
+    );
+
+    // getSession from an unregistered origin should be denied
+    const session = await instance.client.getSession({
+      fetchOptions: {
+        headers: {
+          cookie: headers.get("cookie") ?? "",
+          origin: "http://unknown.example.com",
+        },
+      },
+    });
+
+    expect(session.data).toBeNull();
+  });
 });

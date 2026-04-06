@@ -62,3 +62,13 @@ export const editorProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+export const userProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role !== "user" && ctx.user.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Se requiere rol de usuario o administrador.",
+    });
+  }
+  return next({ ctx });
+});

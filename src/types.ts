@@ -28,8 +28,13 @@ export interface ModuleConfig {
   /**
    * Roles that are allowed to sign in / sign up from this module.
    * For multi-role users (comma-separated), access is granted if at least one role matches.
+   *
+   * Can be a static array of role names or a callback that receives the user's
+   * roles (already split by comma) and returns whether access is allowed.
+   * The callback may be async, which is useful for querying dynamic roles from
+   * a database or external service.
    */
-  allowedRoles: string[];
+  allowedRoles: string[] | ((roles: string[]) => boolean | Promise<boolean>);
   /**
    * Custom deny message for this specific module.
    * Falls back to the global `moduleDenyMessage` if not set.
@@ -163,6 +168,16 @@ export interface AdminOptions {
    * @default "allow"
    */
   moduleUnmatchedBehavior?: "allow" | "deny" | undefined;
+  /**
+   * Whether to enforce module-based access control on `getSession` requests.
+   * When enabled, a session retrieved from an origin whose module does not
+   * allow the user's role will be returned as `null` (as if unauthenticated).
+   *
+   * Only applies when `modules` is configured.
+   *
+   * @default true
+   */
+  enforceModulesOnSession?: boolean | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

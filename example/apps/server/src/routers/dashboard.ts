@@ -5,6 +5,7 @@ import {
   protectedProcedure,
   adminProcedure,
   editorProcedure,
+  userProcedure,
 } from "../trpc";
 
 export const dashboardRouter = router({
@@ -43,7 +44,7 @@ export const dashboardRouter = router({
     role: ctx.user.role,
   })),
 
-  getUserContent: protectedProcedure
+  getUserContent: userProcedure
     .input(z.object({ page: z.number().default(1) }))
     .query(({ ctx, input }) => ({
       message: `Panel de usuario — bienvenido, ${ctx.user.name}`,

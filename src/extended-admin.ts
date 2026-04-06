@@ -90,11 +90,11 @@ function getRequestOrigin(ctx: {
   return null;
 }
 
-function checkModuleAccess(
+async function checkModuleAccess(
   opts: AdminOptions,
   role: string,
   ctx: { headers?: Headers; request?: Request; path?: string },
-): { allowed: true } | { allowed: false; message: string } {
+): Promise<{ allowed: true } | { allowed: false; message: string }> {
   if (!opts.modules || Object.keys(opts.modules).length === 0) {
     return { allowed: true };
   }
@@ -115,7 +115,9 @@ function checkModuleAccess(
   }
 
   const userRoles = role.split(",").map((r) => r.trim());
-  const hasAllowed = userRoles.some((r) => matched.allowedRoles.includes(r));
+  const hasAllowed = typeof matched.allowedRoles === "function"
+    ? await matched.allowedRoles(userRoles)
+    : userRoles.some((r) => matched.allowedRoles.includes(r));
 
   if (hasAllowed) return { allowed: true };
 
@@ -204,7 +206,7 @@ export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
 
                   // Check module-based access control for sign-up
                   if (ctx) {
-                    const moduleResult = checkModuleAccess(opts, role, ctx);
+                    const moduleResult = await checkModuleAccess(opts, role, ctx);
                     if (!moduleResult.allowed) {
                       if (
                         ctx.path?.startsWith("/callback") ||
@@ -300,7 +302,7 @@ export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
                   }
 
                   // Check module-based access control
-                  const moduleResult = checkModuleAccess(
+                  const moduleResult = await checkModuleAccess(
                     opts,
                     user?.role ?? opts.defaultRole ?? "user",
                     ctx,
@@ -332,6 +334,31 @@ export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
 
     hooks: {
       after: [
+        {
+          matcher(context: { path?: string }) {
+            return context.path === "/get-session";
+          },
+          handler: createAuthMiddleware(async (ctx) => {
+            if (opts.enforceModulesOnSession === false) return;
+            if (!opts.modules || Object.keys(opts.modules).length === 0) return;
+
+            const response = await getEndpointResponse(ctx);
+            if (!response?.user) return;
+
+            const moduleResult = await checkModuleAccess(
+              opts,
+              response.user.role ?? opts.defaultRole ?? "user",
+              ctx,
+            );
+
+            if (!moduleResult.allowed) {
+              throw APIError.from("UNAUTHORIZED", {
+                message: moduleResult.message,
+                code: "MODULE_ACCESS_DENIED",
+              });
+            }
+          }),
+        },
         {
           matcher(context: { path?: string }) {
             return context.path === "/list-sessions";
