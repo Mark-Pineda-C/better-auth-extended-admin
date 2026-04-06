@@ -6,6 +6,8 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { extendedAdmin } from "../src/extended-admin";
 import { extendedAdminClient } from "../src/client";
 import type { AdminOptions } from "../src/types";
+import { invalidateRoleCache } from "../src/has-permission";
+import { invalidateModuleCache } from "../src/module-store";
 
 export const TEST_SECRET =
   "test-secret-1234567890abcdef-long-enough-for-security";
@@ -19,6 +21,9 @@ export type TestDB = Record<string, Record<string, unknown>[]>;
  * Each call returns a fresh isolated instance.
  */
 export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: AdminOptions["ac"] } = {}) {
+  invalidateRoleCache();
+  invalidateModuleCache();
+
   // memoryAdapter requires tables to be pre-initialized before any read operations
   const db: TestDB = {
     user: [],
@@ -26,6 +31,7 @@ export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: Ad
     account: [],
     verification: [],
     globalRole: [],
+    globalModule: [],
   };
 
   const auth = betterAuth({

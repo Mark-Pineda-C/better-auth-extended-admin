@@ -6,23 +6,23 @@ import { defaultAc, defaultRoles } from "../src/access";
 // ─── parseRoles ──────────────────────────────────────────────────────────────
 
 describe("parseRoles", () => {
-  test("retorna el string tal cual si ya es string", () => {
+  test("returns the string as is if it is already a string", () => {
     expect(parseRoles("admin")).toBe("admin");
   });
 
-  test("convierte array de un elemento a string", () => {
+  test("converts an array of one element to a string", () => {
     expect(parseRoles(["editor"])).toBe("editor");
   });
 
-  test("convierte array de múltiples roles a string separado por coma", () => {
+  test("converts an array of multiple roles to a string separated by comma", () => {
     expect(parseRoles(["admin", "editor"])).toBe("admin,editor");
   });
 
-  test("convierte array de tres roles a string separado por coma", () => {
+  test("converts an array of three roles to a string separated by comma", () => {
     expect(parseRoles(["admin", "editor", "viewer"])).toBe("admin,editor,viewer");
   });
 
-  test("maneja array vacío", () => {
+  test("handles empty array", () => {
     expect(parseRoles([])).toBe("");
   });
 });
@@ -32,7 +32,7 @@ describe("parseRoles", () => {
 describe("hasPermission", () => {
   const baseOpts = { adminRoles: ["admin"] as string[] };
 
-  test("admin tiene permiso para user:create", async () => {
+  test("admin has permission for user:create", async () => {
     const result = await hasPermission({
       userId: "u1",
       role: "admin",
@@ -42,7 +42,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("admin tiene permiso para user:ban", async () => {
+  test("admin has permission for user:ban", async () => {
     const result = await hasPermission({
       userId: "u1",
       role: "admin",
@@ -52,7 +52,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("admin tiene permiso para session:list", async () => {
+  test("admin has permission for session:list", async () => {
     const result = await hasPermission({
       userId: "u1",
       role: "admin",
@@ -62,7 +62,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("user NO tiene permiso para user:create", async () => {
+  test("user does not have permission for user:create", async () => {
     const result = await hasPermission({
       userId: "u2",
       role: "user",
@@ -72,7 +72,7 @@ describe("hasPermission", () => {
     expect(result).toBe(false);
   });
 
-  test("user NO tiene permiso para user:ban", async () => {
+  test("user does not have permission for user:ban", async () => {
     const result = await hasPermission({
       userId: "u2",
       role: "user",
@@ -82,7 +82,7 @@ describe("hasPermission", () => {
     expect(result).toBe(false);
   });
 
-  test("user incluido en adminUserIds tiene permiso aunque su role sea user", async () => {
+  test("user included in adminUserIds has permission even if their role is user", async () => {
     const result = await hasPermission({
       userId: "superuser-id",
       role: "user",
@@ -92,7 +92,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("retorna false si no se pasan permissions", async () => {
+  test("returns false if no permissions are passed", async () => {
     const result = await hasPermission({
       userId: "u1",
       role: "admin",
@@ -102,7 +102,7 @@ describe("hasPermission", () => {
     expect(result).toBe(false);
   });
 
-  test("multi-rol: usuario con role admin,user tiene permiso admin", async () => {
+  test("multi-role: user with role admin,user has admin permission", async () => {
     const result = await hasPermission({
       userId: "u3",
       role: "admin,user",
@@ -112,7 +112,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("rol desconocido retorna false", async () => {
+  test("unknown role returns false", async () => {
     const result = await hasPermission({
       userId: "u4",
       role: "unknown-role",
@@ -122,7 +122,7 @@ describe("hasPermission", () => {
     expect(result).toBe(false);
   });
 
-  test("usa defaultRole cuando role es undefined", async () => {
+  test("uses defaultRole when role is undefined", async () => {
     const result = await hasPermission({
       userId: "u5",
       role: undefined,
@@ -132,7 +132,7 @@ describe("hasPermission", () => {
     expect(result).toBe(false);
   });
 
-  test("rol personalizado con permisos customizados funciona", async () => {
+  test("custom role with custom permissions works", async () => {
     const editorRole = defaultAc.newRole({ user: ["list", "get"] });
     const result = await hasPermission({
       userId: "u6",
@@ -143,7 +143,7 @@ describe("hasPermission", () => {
     expect(result).toBe(true);
   });
 
-  test("rol personalizado no tiene permisos que no se le asignaron", async () => {
+  test("custom role does not have permissions that were not assigned", async () => {
     const editorRole = defaultAc.newRole({ user: ["list", "get"] });
     const result = await hasPermission({
       userId: "u6",
@@ -158,7 +158,7 @@ describe("hasPermission", () => {
 // ─── invalidateRoleCache ─────────────────────────────────────────────────────
 
 describe("invalidateRoleCache", () => {
-  test("se puede llamar múltiples veces sin error", () => {
+  test("can be called multiple times without error", () => {
     expect(() => {
       invalidateRoleCache();
       invalidateRoleCache();

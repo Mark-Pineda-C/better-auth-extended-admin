@@ -1,11 +1,55 @@
 import { describe, expect, test } from "bun:test";
 import { createTestInstance } from "./setup";
+import { defaultAc } from "../src/access";
+
+function seedModule(
+  instance: ReturnType<typeof createTestInstance>,
+  input: {
+    key: string;
+    origin: string;
+    denyMessage?: string;
+    enabled?: boolean;
+  },
+) {
+  const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+  const table = (db["globalModule"] ??= []);
+  table.push({
+    id: `${input.key}-id`,
+    key: input.key,
+    name: input.key,
+    origins: JSON.stringify([input.origin]),
+    denyMessage: input.denyMessage ?? null,
+    enabled: input.enabled ?? true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
+function seedRoleWithModuleAccess(
+  instance: ReturnType<typeof createTestInstance>,
+  roleName: string,
+  moduleKeys: string[],
+) {
+  const db = instance.db as Record<string, Array<Record<string, unknown>>>;
+  const table = (db["globalRole"] ??= []);
+  table.push({
+    id: `${roleName}-id`,
+    name: roleName,
+    permissions: JSON.stringify({ module: moduleKeys }),
+    description: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
 
 // ─── ban/disable hooks en sign-in ─────────────────────────────────────────────
 
-describe("session create hook — usuario baneado", () => {
-  test("usuario baneado no puede iniciar sesión (recibe 403)", async () => {
-    const instance = createTestInstance();
+describe("session create hook — banned user", () => {
+  test("banned user cannot sign in (receives 403)", async () => {
+    const instance = createTestInstance({
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+    });
     const admin = await instance.createAdminUser();
 
     await instance.signUpUser("banned@test.com", "password123", "Banned User");
@@ -28,7 +72,7 @@ describe("session create hook — usuario baneado", () => {
     expect(res.error?.status).toBe(403);
   });
 
-  test("el mensaje de ban personalizado se incluye en el error", async () => {
+  test("the custom ban message is included in the error", async () => {
     const customMsg = "Fuiste suspendido permanentemente.";
     const instance = createTestInstance({ bannedUserMessage: customMsg });
     const admin = await instance.createAdminUser();
@@ -52,8 +96,11 @@ describe("session create hook — usuario baneado", () => {
     expect(res.error?.message).toContain(customMsg);
   });
 
-  test("ban expirado se limpia y el usuario puede iniciar sesión", async () => {
-    const instance = createTestInstance();
+  test("expired ban is cleared and the user can sign in", async () => {
+    const instance = createTestInstance({
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+    });
     const admin = await instance.createAdminUser();
 
     await instance.signUpUser("expiredban@test.com", "password123", "Expired Ban");
@@ -61,17 +108,17 @@ describe("session create hook — usuario baneado", () => {
     const user = (db["user"] ?? []).find((u) => u["email"] === "expiredban@test.com");
     const userId = String(user?.["id"] ?? "");
 
-    // Ban con 1 segundo de expiración que ya venció
+    // Ban with 1 second expiration that has expired
     await instance.client.extendedAdmin.banUser({
       userId,
       banExpiresIn: 1,
       fetchOptions: { headers: Object.fromEntries(admin.headers.entries()) },
     });
 
-    // Simular tiempo expirado modificando directamente banExpires en DB
+    // Simulate expired time by modifying banExpires directly in DB
     const userRecord = (db["user"] ?? []).find((u) => u["id"] === userId);
     if (userRecord) {
-      userRecord["banExpires"] = new Date(Date.now() - 10_000); // 10 segundos en el pasado
+      userRecord["banExpires"] = new Date(Date.now() - 10_000); // 10 seconds in the past
     }
 
     const res = await instance.client.signIn.email({
@@ -82,7 +129,7 @@ describe("session create hook — usuario baneado", () => {
     expect(res.error).toBeNull();
     expect(res.data?.user).toBeDefined();
 
-    // Verificar que el ban fue limpiado en DB
+    // Verify that the ban was cleared in DB
     const updatedUser = (db["user"] ?? []).find((u) => u["id"] === userId);
     expect(updatedUser?.["banned"]).toBe(false);
   });
@@ -90,9 +137,12 @@ describe("session create hook — usuario baneado", () => {
 
 // ─── disable hook en sign-in ──────────────────────────────────────────────────
 
-describe("session create hook — usuario deshabilitado", () => {
-  test("usuario con isActive: false no puede iniciar sesión (recibe 403)", async () => {
-    const instance = createTestInstance();
+describe("session create hook — disabled user", () => {
+  test("user with isActive: false cannot sign in (receives 403)", async () => {
+    const instance = createTestInstance({
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+    });
     const admin = await instance.createAdminUser();
 
     await instance.signUpUser("disabled@test.com", "password123", "Disabled User");
@@ -114,7 +164,7 @@ describe("session create hook — usuario deshabilitado", () => {
     expect(res.error?.status).toBe(403);
   });
 
-  test("el mensaje de deshabilitación personalizado se incluye en el error", async () => {
+  test("the custom disable message is included in the error", async () => {
     const customMsg = "Tu cuenta fue suspendida temporalmente.";
     const instance = createTestInstance({ disabledUserMessage: customMsg });
     const admin = await instance.createAdminUser();
@@ -138,7 +188,7 @@ describe("session create hook — usuario deshabilitado", () => {
     expect(res.error?.message).toContain(customMsg);
   });
 
-  test("usuario rehabilitado puede iniciar sesión nuevamente", async () => {
+  test("rehabilitated user can sign in again", async () => {
     const instance = createTestInstance();
     const admin = await instance.createAdminUser();
 
@@ -169,8 +219,8 @@ describe("session create hook — usuario deshabilitado", () => {
 
 // ─── user create hook — roles en sign-up ─────────────────────────────────────
 
-describe("user create hook — roles en sign-up", () => {
-  test("defaultRole se aplica a nuevos usuarios", async () => {
+describe("user create hook — roles in sign-up", () => {
+  test("defaultRole is applied to new users", async () => {
     const instance = createTestInstance({ defaultRole: "viewer" });
 
     await instance.signUpUser("newviewer@test.com", "password123", "Viewer User");
@@ -180,7 +230,7 @@ describe("user create hook — roles en sign-up", () => {
     expect(user?.["role"]).toBe("viewer");
   });
 
-  test("defaultRoleForSignUp tiene precedencia sobre defaultRole", async () => {
+  test("defaultRoleForSignUp takes precedence over defaultRole", async () => {
     const instance = createTestInstance({
       defaultRole: "viewer",
       defaultRoleForSignUp: "member",
@@ -193,7 +243,7 @@ describe("user create hook — roles en sign-up", () => {
     expect(user?.["role"]).toBe("member");
   });
 
-  test("sin configuración, el rol por defecto es 'user'", async () => {
+  test("without configuration, the default role is 'user'", async () => {
     const instance = createTestInstance();
 
     await instance.signUpUser("defaultuser@test.com", "password123", "Default User");
@@ -203,7 +253,7 @@ describe("user create hook — roles en sign-up", () => {
     expect(user?.["role"]).toBe("user");
   });
 
-  test("isActive se establece como true al crear un usuario", async () => {
+  test("isActive is set to true when creating a user", async () => {
     const instance = createTestInstance();
 
     await instance.signUpUser("active@test.com", "password123", "Active User");
@@ -216,19 +266,40 @@ describe("user create hook — roles en sign-up", () => {
 
 // ─── modules — control de acceso por módulo ───────────────────────────────────
 
-describe("modules — acceso por origen", () => {
-  test("usuario con rol permitido puede iniciar sesión desde el módulo", async () => {
+describe("modules — access by origin", () => {
+  test("legacy mode skips module checks when dynamicModules is disabled", async () => {
     const instance = createTestInstance({
-      modules: {
-        adminPanel: {
-          origin: "http://admin.example.com",
-          allowedRoles: ["admin"],
-        },
+      moduleUnmatchedBehavior: "deny",
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
+    });
+
+    await instance.signUpUser("legacy@test.com", "password123", "Legacy User");
+    const res = await instance.client.signIn.email({
+      email: "legacy@test.com",
+      password: "password123",
+      fetchOptions: {
+        headers: { origin: "http://admin.example.com" },
       },
+    });
+
+    expect(res.error).toBeNull();
+    expect(res.data?.user).toBeDefined();
+  });
+
+  test("user with allowed role can sign in from the module", async () => {
+    const instance = createTestInstance({
+      dynamicModules: { enabled: true },
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
     });
     const admin = await instance.createAdminUser();
 
-    // Admin sign-in desde el origen del módulo permitido
+    // Admin sign-in from the allowed module origin
     const res = await instance.client.signIn.email({
       email: "admin@test.com",
       password: "adminpassword123",
@@ -241,14 +312,13 @@ describe("modules — acceso por origen", () => {
     expect(res.data?.user).toBeDefined();
   });
 
-  test("usuario con rol no permitido es bloqueado en el módulo", async () => {
+  test("user with non-allowed role is blocked in the module", async () => {
     const instance = createTestInstance({
-      modules: {
-        adminPanel: {
-          origin: "http://admin.example.com",
-          allowedRoles: ["admin"],
-        },
-      },
+      dynamicModules: { enabled: true },
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
     });
 
     await instance.signUpUser("regularmod@test.com", "password123", "Regular Mod");
@@ -265,16 +335,15 @@ describe("modules — acceso por origen", () => {
     expect(res.error?.status).toBe(403);
   });
 
-  test("mensaje de denegación personalizado del módulo aparece en el error", async () => {
+  test("the custom module deny message appears in the error", async () => {
     const denyMsg = "No tienes acceso al panel de administración.";
     const instance = createTestInstance({
-      modules: {
-        adminPanel: {
-          origin: "http://admin.example.com",
-          allowedRoles: ["admin"],
-          denyMessage: denyMsg,
-        },
-      },
+      dynamicModules: { enabled: true },
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
+      denyMessage: denyMsg,
     });
 
     await instance.signUpUser("deniedmod@test.com", "password123", "Denied Mod");
@@ -291,17 +360,16 @@ describe("modules — acceso por origen", () => {
     expect(res.error?.message).toContain(denyMsg);
   });
 
-  test("con moduleUnmatchedBehavior: 'deny', origen no registrado bloquea el registro", async () => {
-    // Con moduleUnmatchedBehavior: 'deny', el hook user.create.before también verifica
-    // el origen. Un sign-up desde un origen no registrado queda denegado con 403.
+  test("with moduleUnmatchedBehavior: 'deny', unknown origin blocks the registration", async () => {
+    // With moduleUnmatchedBehavior: 'deny', the user.create.before hook also checks
+    // the origin. A sign-up from an unknown origin is denied with 403.
     const instance = createTestInstance({
       moduleUnmatchedBehavior: "deny",
-      modules: {
-        adminPanel: {
-          origin: "http://admin.example.com",
-          allowedRoles: ["admin"],
-        },
-      },
+      dynamicModules: { enabled: true },
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
     });
 
     const res = await instance.client.signUp.email({
@@ -317,14 +385,13 @@ describe("modules — acceso por origen", () => {
     expect(res.error?.status).toBe(403);
   });
 
-  test("con moduleUnmatchedBehavior: 'allow' (default), origen no registrado permite el acceso", async () => {
+  test("with moduleUnmatchedBehavior: 'allow' (default), unknown origin allows access", async () => {
     const instance = createTestInstance({
-      modules: {
-        adminPanel: {
-          origin: "http://admin.example.com",
-          allowedRoles: ["admin"],
-        },
-      },
+      dynamicModules: { enabled: true },
+    });
+    seedModule(instance, {
+      key: "adminpanel",
+      origin: "http://admin.example.com",
     });
 
     await instance.signUpUser("unmatchedallow@test.com", "password123", "Unmatched Allow");
@@ -341,15 +408,17 @@ describe("modules — acceso por origen", () => {
     expect(res.data?.user).toBeDefined();
   });
 
-  test("allowedRoles como función síncrona permite al rol correcto", async () => {
+  test("dynamic role with module access allows the correct role", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: (roles) => roles.includes("editor"),
-        },
-      },
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, {
+      key: "editorpanel",
+      origin: "http://editor.example.com",
+    });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
 
     await instance.signUpUser("fneditor@test.com", "password123", "Fn Editor");
     const db = instance.db as Record<string, Array<Record<string, unknown>>>;
@@ -368,20 +437,22 @@ describe("modules — acceso por origen", () => {
     expect(res.data?.user).toBeDefined();
   });
 
-  test("allowedRoles como función async permite al rol correcto", async () => {
+  test("multi-role is allowed when at least one role has access to the module", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: async (roles) => roles.includes("editor"),
-        },
-      },
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, {
+      key: "editorpanel",
+      origin: "http://editor.example.com",
+    });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
 
     await instance.signUpUser("asynceditor@test.com", "password123", "Async Editor");
     const db = instance.db as Record<string, Array<Record<string, unknown>>>;
     const user = (db["user"] ?? []).find((u) => u["email"] === "asynceditor@test.com");
-    if (user) user["role"] = "editor";
+    if (user) user["role"] = "user,editor";
 
     const res = await instance.client.signIn.email({
       email: "asynceditor@test.com",
@@ -395,15 +466,15 @@ describe("modules — acceso por origen", () => {
     expect(res.data?.user).toBeDefined();
   });
 
-  test("allowedRoles como función que deniega bloquea con 403", async () => {
+  test("dynamic role without module access is blocked with 403", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: () => false,
-        },
-      },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, {
+      key: "editorpanel",
+      origin: "http://editor.example.com",
+    });
+    seedRoleWithModuleAccess(instance, "editor", ["othermodule"]);
 
     await instance.signUpUser("fndeny@test.com", "password123", "Fn Deny");
     const db = instance.db as Record<string, Array<Record<string, unknown>>>;
@@ -425,7 +496,7 @@ describe("modules — acceso por origen", () => {
 
 // ─── modules — enforceModulesOnSession en getSession ──────────────────────────
 
-describe("modules — enforceModulesOnSession en getSession", () => {
+describe("modules — enforceModulesOnSession in getSession", () => {
   /**
    * Signs up a user without an origin (unmatched → allowed), promotes to the
    * given role in the memory DB, then signs in from `signInOrigin` so the
@@ -447,19 +518,14 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     return headers;
   }
 
-  test("getSession devuelve null cuando el usuario accede desde un módulo no permitido para su rol", async () => {
+  test("getSession returns null when the user accesses from an unauthorized module for their role", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: ["admin", "editor"],
-        },
-        userPanel: {
-          origin: "http://user.example.com",
-          allowedRoles: ["admin", "user"],
-        },
-      },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, { key: "editorpanel", origin: "http://editor.example.com" });
+    seedModule(instance, { key: "userpanel", origin: "http://user.example.com" });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
+    seedRoleWithModuleAccess(instance, "user", ["userpanel"]);
 
     const headers = await createEditorWithSession(
       instance, "editor@test.com", "http://editor.example.com",
@@ -477,19 +543,16 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     expect(session.data).toBeNull();
   });
 
-  test("getSession devuelve sesión válida cuando el usuario accede desde su módulo permitido", async () => {
+  test("getSession returns a valid session when the user accesses from their allowed module", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: ["admin", "editor"],
-        },
-        userPanel: {
-          origin: "http://user.example.com",
-          allowedRoles: ["admin", "user"],
-        },
-      },
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, { key: "editorpanel", origin: "http://editor.example.com" });
+    seedModule(instance, { key: "userpanel", origin: "http://user.example.com" });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
+    seedRoleWithModuleAccess(instance, "user", ["userpanel"]);
 
     const headers = await createEditorWithSession(
       instance, "editor2@test.com", "http://editor.example.com",
@@ -508,19 +571,12 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     expect(session.data?.user?.email).toBe("editor2@test.com");
   });
 
-  test("admin puede acceder a getSession desde cualquier módulo", async () => {
+  test("admin can access getSession from any module", async () => {
     const instance = createTestInstance({
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: ["admin", "editor"],
-        },
-        userPanel: {
-          origin: "http://user.example.com",
-          allowedRoles: ["admin", "user"],
-        },
-      },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, { key: "editorpanel", origin: "http://editor.example.com" });
+    seedModule(instance, { key: "userpanel", origin: "http://user.example.com" });
 
     const admin = await instance.createAdminUser();
 
@@ -536,20 +592,15 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     expect(session.data?.user).toBeDefined();
   });
 
-  test("enforceModulesOnSession: false desactiva la verificación en getSession", async () => {
+  test("enforceModulesOnSession: false disables the verification in getSession", async () => {
     const instance = createTestInstance({
       enforceModulesOnSession: false,
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: ["admin", "editor"],
-        },
-        userPanel: {
-          origin: "http://user.example.com",
-          allowedRoles: ["admin", "user"],
-        },
-      },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, { key: "editorpanel", origin: "http://editor.example.com" });
+    seedModule(instance, { key: "userpanel", origin: "http://user.example.com" });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
+    seedRoleWithModuleAccess(instance, "user", ["userpanel"]);
 
     const headers = await createEditorWithSession(
       instance, "editor3@test.com", "http://editor.example.com",
@@ -567,7 +618,7 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     expect(session.data?.user).toBeDefined();
   });
 
-  test("sin modules configurados, getSession funciona normalmente", async () => {
+  test("without configured modules, getSession works normally", async () => {
     const instance = createTestInstance();
 
     const { headers } = await instance.signUpUser(
@@ -586,20 +637,15 @@ describe("modules — enforceModulesOnSession en getSession", () => {
     expect(session.data?.user).toBeDefined();
   });
 
-  test("con moduleUnmatchedBehavior: 'deny', getSession desde origen no registrado devuelve null", async () => {
+  test("with moduleUnmatchedBehavior: 'deny', getSession from unknown origin returns null", async () => {
     const instance = createTestInstance({
       moduleUnmatchedBehavior: "deny",
-      modules: {
-        editorPanel: {
-          origin: "http://editor.example.com",
-          allowedRoles: ["admin", "editor"],
-        },
-        userPanel: {
-          origin: "http://user.example.com",
-          allowedRoles: ["admin", "user"],
-        },
-      },
+      dynamicModules: { enabled: true },
     });
+    seedModule(instance, { key: "editorpanel", origin: "http://editor.example.com" });
+    seedModule(instance, { key: "userpanel", origin: "http://user.example.com" });
+    seedRoleWithModuleAccess(instance, "editor", ["editorpanel"]);
+    seedRoleWithModuleAccess(instance, "user", ["userpanel"]);
 
     // Sign up from userPanel (default role "user" is allowed there)
     await instance.signUpUser(

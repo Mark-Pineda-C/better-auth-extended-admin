@@ -16,7 +16,9 @@ export {
 // Types
 export type {
   AdminOptions,
-  ModuleConfig,
+  DynamicModule,
+  DynamicModuleCreateInput,
+  DynamicModuleUpdateInput,
   SessionWithImpersonatedBy,
   UserWithRole,
   InferAdminRolesFromOption,

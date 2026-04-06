@@ -64,6 +64,39 @@ export const schema = {
       },
     },
   },
+  globalModule: {
+    fields: {
+      key: {
+        type: "string",
+        required: true,
+      },
+      name: {
+        type: "string",
+        required: true,
+      },
+      origins: {
+        type: "string",
+        required: true,
+      },
+      denyMessage: {
+        type: "string",
+        required: false,
+      },
+      enabled: {
+        type: "boolean",
+        defaultValue: true,
+        required: true,
+      },
+      createdAt: {
+        type: "date",
+        required: true,
+      },
+      updatedAt: {
+        type: "date",
+        required: true,
+      },
+    },
+  },
 } satisfies BetterAuthPluginDBSchema;
 
 export type AdminSchema = typeof schema;

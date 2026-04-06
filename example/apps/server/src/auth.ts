@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAccessControl } from "better-auth/plugins/access";
 import { extendedAdmin } from "better-auth-extended-admin";
+import { randomUUID } from "crypto";
 import { db } from "./db";
 import * as schema from "./schema";
 
@@ -64,26 +65,46 @@ export const DEFAULT_MODULE_ACCESS: Record<string, string[]> = {
   user: ["userPanel"],
 };
 
-function createModuleChecker(moduleName: string) {
-  return async (roles: string[]): Promise<boolean> => {
-    if (roles.includes("admin")) return true;
-    const dbRoles = db.select().from(schema.globalRole).all();
-    return roles.some((role) => {
-      const dbRole = dbRoles.find((r) => r.name === role);
-      if (dbRole) {
-        try {
-          const perms = JSON.parse(dbRole.permissions) as Record<
-            string,
-            string[]
-          >;
-          return perms.module?.includes(moduleName) ?? false;
-        } catch {
-          return false;
-        }
-      }
-      return DEFAULT_MODULE_ACCESS[role]?.includes(moduleName) ?? false;
-    });
-  };
+export const DEFAULT_MODULES = [
+  {
+    key: "adminPanel",
+    name: "Admin Panel",
+    origins: ["http://admin-panel.localhost:1355"],
+    denyMessage:
+      "Solo usuarios con rol 'admin' pueden acceder al panel de administración.",
+  },
+  {
+    key: "editorPanel",
+    name: "Editor Panel",
+    origins: ["http://editor-panel.localhost:1355"],
+    denyMessage:
+      "Solo usuarios con rol 'admin' o 'editor' pueden acceder al panel de edición.",
+  },
+  {
+    key: "userPanel",
+    name: "User Panel",
+    origins: ["http://user-panel.localhost:1355"],
+    denyMessage:
+      "Solo usuarios con rol 'admin' o 'user' pueden acceder al panel de usuarios.",
+  },
+];
+
+const existingModuleKeys = new Set(
+  db.select({ key: schema.globalModule.key }).from(schema.globalModule).all().map((m) => m.key),
+);
+
+for (const mod of DEFAULT_MODULES) {
+  if (existingModuleKeys.has(mod.key)) continue;
+  db.insert(schema.globalModule).values({
+    id: randomUUID(),
+    key: mod.key,
+    name: mod.name,
+    origins: JSON.stringify(mod.origins),
+    denyMessage: mod.denyMessage,
+    enabled: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }).run();
 }
 
 export const auth = betterAuth({
@@ -98,10 +119,17 @@ export const auth = betterAuth({
     enabled: true,
   },
   trustedOrigins: [
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
+    "http://admin-panel.localhost:1355",
+    "http://editor-panel.localhost:1355",
+    "http://user-panel.localhost:1355",
   ],
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: "none",
+      secure: true,
+      httpOnly: true,
+    }
+  },
   plugins: [
     extendedAdmin({
       adminRoles: ["admin"],
@@ -109,30 +137,11 @@ export const auth = betterAuth({
       moduleUnmatchedBehavior: "deny",
       ac,
       dynamicRoles: { enabled: true },
+      dynamicModules: { enabled: true },
       roles: {
         admin: adminRole,
         editor: editorRole,
         user: userRole,
-      },
-      modules: {
-        adminPanel: {
-          origin: "http://localhost:3001",
-          allowedRoles: createModuleChecker("adminPanel"),
-          denyMessage:
-            "Solo usuarios con rol 'admin' pueden acceder al panel de administración.",
-        },
-        editorPanel: {
-          origin: "http://localhost:3002",
-          allowedRoles: createModuleChecker("editorPanel"),
-          denyMessage:
-            "Solo usuarios con rol 'admin' o 'editor' pueden acceder al panel de edición.",
-        },
-        userPanel: {
-          origin: "http://localhost:3003",
-          allowedRoles: createModuleChecker("userPanel"),
-          denyMessage:
-            "Solo usuarios con rol 'admin' o 'user' pueden acceder al panel de usuarios.",
-        },
       },
     }),
   ],

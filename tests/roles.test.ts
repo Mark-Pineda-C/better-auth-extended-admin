@@ -7,6 +7,7 @@ function createDynamicInstance() {
   return createTestInstance({
     ac: defaultAc,
     dynamicRoles: { enabled: true },
+    dynamicModules: { enabled: true },
   });
 }
 
@@ -19,7 +20,7 @@ async function setupDynamicAdmin() {
 // ─── createRole ───────────────────────────────────────────────────────────────
 
 describe("createRole", () => {
-  test("admin puede crear un rol dinámico", async () => {
+  test("admin can create a dynamic role", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.createRole({
@@ -34,7 +35,7 @@ describe("createRole", () => {
     expect((res.data as unknown as { role: { name: string } })?.role?.name).toBe("moderator");
   });
 
-  test("el nombre del rol se normaliza a minúsculas", async () => {
+  test("the role name is normalized to lowercase", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.createRole({
@@ -47,7 +48,7 @@ describe("createRole", () => {
     expect((res.data as unknown as { role: { name: string } })?.role?.name).toBe("uppercase_role");
   });
 
-  test("no se puede crear un rol con nombre igual a un rol estático (admin)", async () => {
+  test("cannot create a role with the same name as a static role (admin)", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.createRole({
@@ -60,7 +61,7 @@ describe("createRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("no se puede crear un rol con nombre igual a un rol estático (user)", async () => {
+  test("cannot create a role with the same name as a static role (user)", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.createRole({
@@ -73,7 +74,7 @@ describe("createRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("no se puede crear un rol con nombre duplicado", async () => {
+  test("cannot create a role with a duplicate name", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -92,7 +93,7 @@ describe("createRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("se respeta maximumRoles cuando se alcanza el límite", async () => {
+  test("maximumRoles is respected when the limit is reached", async () => {
     const instance = createTestInstance({
       ac: defaultAc,
       dynamicRoles: { enabled: true, maximumRoles: 1 },
@@ -116,7 +117,7 @@ describe("createRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("permisos se devuelven como objeto (no string JSON)", async () => {
+  test("permissions are returned as an object (not a string JSON)", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const perms = { user: ["list", "get"] };
@@ -131,7 +132,39 @@ describe("createRole", () => {
     expect(role?.permissions).toEqual(perms);
   });
 
-  test("usuario sin permiso recibe 403", async () => {
+  test("rejects permissions.module with references to nonexistent modules", async () => {
+    const { client, adminHeaders } = await setupDynamicAdmin();
+
+    const res = await client.extendedAdmin.createRole({
+      name: "invalid-module-ref",
+      permissions: { module: ["no-existe"] },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    expect(res.error).not.toBeNull();
+    expect(res.error?.status).toBe(400);
+  });
+
+  test("legacy mode allows permissions.module without module table validation", async () => {
+    const instance = createTestInstance({
+      ac: defaultAc,
+      dynamicRoles: { enabled: true },
+    });
+    const admin = await instance.createAdminUser();
+
+    const res = await instance.client.extendedAdmin.createRole({
+      name: "legacy-module-ref",
+      permissions: { module: ["missing-module"] },
+      fetchOptions: { headers: Object.fromEntries(admin.headers.entries()) },
+    });
+
+    expect(res.error).toBeNull();
+    expect((res.data as { role: { name: string } })?.role?.name).toBe(
+      "legacy-module-ref",
+    );
+  });
+
+  test("user without permission receives 403", async () => {
     const { client, signInUser } = await setupDynamicAdmin();
     const { headers } = await signInUser("admin@test.com", "adminpassword123");
 
@@ -154,7 +187,7 @@ describe("createRole", () => {
 // ─── updateRole ───────────────────────────────────────────────────────────────
 
 describe("updateRole", () => {
-  test("admin puede actualizar permisos de un rol existente", async () => {
+  test("admin can update permissions of an existing role", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -175,7 +208,7 @@ describe("updateRole", () => {
     expect(perms?.user).toContain("ban");
   });
 
-  test("admin puede renombrar un rol", async () => {
+  test("admin can rename a role", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -194,7 +227,7 @@ describe("updateRole", () => {
     expect((res.data as unknown as { role: { name: string } })?.role?.name).toBe("new-name");
   });
 
-  test("actualizar un rol inexistente retorna 404", async () => {
+  test("updating a nonexistent role returns 404", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.updateRole({
@@ -206,12 +239,38 @@ describe("updateRole", () => {
     expect(res.error).not.toBeNull();
     expect(res.error?.status).toBe(404);
   });
+
+  test("rejects update of permissions.module with nonexistent module", async () => {
+    const { client, adminHeaders } = await setupDynamicAdmin();
+
+    await client.extendedAdmin.createModule({
+      key: "editorpanel",
+      name: "Editor",
+      origins: ["http://editor.example.com"],
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    await client.extendedAdmin.createRole({
+      name: "mod-role",
+      permissions: { module: ["editorpanel"] },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    const res = await client.extendedAdmin.updateRole({
+      name: "mod-role",
+      data: { permissions: { module: ["missingmodule"] } },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    expect(res.error).not.toBeNull();
+    expect(res.error?.status).toBe(400);
+  });
 });
 
 // ─── deleteRole ───────────────────────────────────────────────────────────────
 
 describe("deleteRole", () => {
-  test("admin puede eliminar un rol dinámico sin usuarios asignados", async () => {
+  test("admin can delete a dynamic role without users assigned", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -229,7 +288,7 @@ describe("deleteRole", () => {
     expect((res.data as { success: boolean })?.success).toBe(true);
   });
 
-  test("no se puede eliminar un rol estático (admin)", async () => {
+  test("cannot delete a static role (admin)", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.deleteRole({
@@ -241,7 +300,7 @@ describe("deleteRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("no se puede eliminar un rol inexistente", async () => {
+  test("cannot delete a nonexistent role", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.deleteRole({
@@ -257,7 +316,7 @@ describe("deleteRole", () => {
 // ─── listRoles ────────────────────────────────────────────────────────────────
 
 describe("listRoles", () => {
-  test("admin puede listar roles dinámicos", async () => {
+  test("admin can list dynamic roles", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -287,7 +346,7 @@ describe("listRoles", () => {
 // ─── getRole ──────────────────────────────────────────────────────────────────
 
 describe("getRole", () => {
-  test("admin puede obtener un rol por nombre", async () => {
+  test("admin can get a role by name", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     await client.extendedAdmin.createRole({
@@ -307,7 +366,7 @@ describe("getRole", () => {
     expect((res.data as { permissions: unknown })?.permissions).toBeDefined();
   });
 
-  test("retorna 404 para un rol inexistente", async () => {
+  test("returns 404 for a nonexistent role", async () => {
     const { client, adminHeaders } = await setupDynamicAdmin();
 
     const res = await client.extendedAdmin.getRole({

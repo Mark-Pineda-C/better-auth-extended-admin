@@ -6,6 +6,7 @@ import {
 } from "better-auth/cookies";
 import { getSessionFromCtx } from "better-auth/api";
 import { ADMIN_ERROR_CODES } from "../error-codes";
+import { defaultRoles } from "../access";
 import { hasPermission } from "../has-permission";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { Where } from "@better-auth/core/db/adapter";
@@ -25,6 +26,44 @@ export const adminMiddleware = createAuthMiddleware(async (ctx) => {
 
 export function parseRoles(roles: string | string[]): string {
   return Array.isArray(roles) ? roles.join(",") : roles;
+}
+
+function normalizeRoleName(role: string): string {
+  return role.toLowerCase().trim();
+}
+
+async function roleExists(
+  role: string,
+  opts: AdminOptions,
+  ctx: {
+    context: {
+      adapter: {
+        findOne(input: {
+          model: string;
+          where: Array<{ field: string; value: string; operator: "eq" }>;
+        }): Promise<unknown>;
+      };
+    };
+  },
+): Promise<boolean> {
+  const normalizedRole = normalizeRoleName(role);
+  const staticRoles = {
+    ...defaultRoles,
+    ...(opts.roles ?? {}),
+  } as Record<string, unknown>;
+  if (staticRoles[normalizedRole]) return true;
+  if (!opts.dynamicRoles?.enabled) {
+    // Backward-compatible behavior: when dynamic roles are disabled and no explicit
+    // static registry is provided, arbitrary role strings are allowed.
+    return !opts.roles;
+  }
+
+  const existing = await ctx.context.adapter.findOne({
+    model: "globalRole",
+    where: [{ field: "name", value: normalizedRole, operator: "eq" }],
+  });
+
+  return !!existing;
 }
 
 // ─── set-role ────────────────────────────────────────────────────────────────
@@ -65,20 +104,20 @@ export const setRole = (opts: AdminOptions) =>
       const body = ctx.body as z.infer<typeof setRoleBodySchema>;
       const inputRoles = Array.isArray(body.role) ? body.role : [body.role];
 
-      if (opts.roles) {
-        for (const role of inputRoles) {
-          if (!opts.roles[role]) {
-            throw APIError.from(
-              "BAD_REQUEST",
-              ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
-            );
-          }
+      for (const role of inputRoles) {
+        if (!await roleExists(role, opts, ctx as Parameters<typeof roleExists>[2])) {
+          throw APIError.from(
+            "BAD_REQUEST",
+            ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+          );
         }
       }
 
+      const normalizedRoles = inputRoles.map((r) => normalizeRoleName(r));
+
       const updatedUser = await ctx.context.internalAdapter.updateUser(
         body.userId,
-        { role: parseRoles(body.role) },
+        { role: parseRoles(normalizedRoles) },
       );
 
       return ctx.json({ user: parseUserOutput(ctx.context.options, updatedUser) });
@@ -279,7 +318,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
               ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
             );
           }
-          if (opts.roles && !opts.roles[role]) {
+          if (!await roleExists(role, opts, ctx as Parameters<typeof roleExists>[2])) {
             throw APIError.from(
               "BAD_REQUEST",
               ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
@@ -287,7 +326,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
           }
         }
 
-        body.data.role = parseRoles(inputRoles);
+        body.data.role = parseRoles(inputRoles.map((r) => normalizeRoleName(r)));
       }
 
       const updatedUser = await ctx.context.internalAdapter.updateUser(

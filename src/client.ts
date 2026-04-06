@@ -52,6 +52,8 @@ export const extendedAdminClient = (options?: ClientAdminOptions) => {
       "/extended-admin/list-users": "GET",
       "/extended-admin/list-roles": "GET",
       "/extended-admin/get-role": "GET",
+      "/extended-admin/list-modules": "GET",
+      "/extended-admin/get-module": "GET",
       "/extended-admin/get-user": "GET",
       "/extended-admin/stop-impersonating": "POST",
     } as const,

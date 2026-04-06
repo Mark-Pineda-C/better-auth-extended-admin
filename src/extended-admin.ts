@@ -2,10 +2,12 @@ import { mergeSchema } from "better-auth/db";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { isAPIError } from "better-auth/api";
+import type { Role } from "better-auth/plugins/access";
 import { defaultRoles } from "./access/statement";
+import { listEnabledModules } from "./module-store";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
-import type { AdminOptions, ModuleConfig } from "./types";
+import type { AdminOptions } from "./types";
 import {
   adminUpdateUser,
   banUser,
@@ -26,6 +28,7 @@ import {
   unbanUser,
   userHasPermission,
 } from "./routes/admin-routes";
+
 import {
   createRole,
   deleteRole,
@@ -33,6 +36,7 @@ import {
   listRoles,
   updateRole,
 } from "./routes/role-routes";
+import { createModule, deleteModule, getModule, listModules, updateModule } from "./routes/module-routes";
 
 declare module "@better-auth/core" {
   interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -55,22 +59,50 @@ const getEndpointResponse = async (ctx: {
   return returned;
 };
 
-function resolveModule(
-  modules: Record<string, ModuleConfig>,
-  requestOrigin: string | null,
-  request: Request | undefined,
-): ModuleConfig | null {
-  for (const mod of Object.values(modules)) {
-    if (mod.match && request) {
-      if (mod.match(request)) return mod;
-      continue;
+interface ResolvedModule {
+  key: string;
+  denyMessage: string | null;
+}
+
+const hasStaticModuleAccess = (
+  roleNames: string[],
+  acRoles: Record<string, Role>,
+  moduleKey: string,
+): boolean => roleNames.some((role) =>
+  (acRoles[role]?.statements?.module ?? []).includes(moduleKey) ||
+  (acRoles[role]?.statements?.module ?? []).includes("*")
+);
+
+async function hasDynamicModuleAccess(
+  roleNames: string[],
+  ctx: { context?: unknown },
+  moduleKey: string,
+): Promise<boolean> {
+  if (!ctx.context) return false;
+  const dbRoles = await (
+    (ctx as {
+      context: {
+        adapter: {
+          findMany(input: { model: string; where: unknown[] }): Promise<Array<{ name: string; permissions: string }>>;
+        };
+      };
+    }).context.adapter.findMany({
+      model: "globalRole",
+      where: [],
+    })
+  );
+
+  return roleNames.some((roleName) => {
+    const dbRole = dbRoles.find((r) => r.name === roleName);
+    if (!dbRole) return false;
+    try {
+      const parsed = JSON.parse(dbRole.permissions) as Record<string, string[]>;
+      return (parsed.module ?? []).includes(moduleKey) ||
+        (parsed.module ?? []).includes("*");
+    } catch {
+      return false;
     }
-    if (mod.origin && requestOrigin) {
-      const origins = Array.isArray(mod.origin) ? mod.origin : [mod.origin];
-      if (origins.includes(requestOrigin)) return mod;
-    }
-  }
-  return null;
+  });
 }
 
 function getRequestOrigin(ctx: {
@@ -93,14 +125,25 @@ function getRequestOrigin(ctx: {
 async function checkModuleAccess(
   opts: AdminOptions,
   role: string,
-  ctx: { headers?: Headers; request?: Request; path?: string },
+  ctx: { headers?: Headers; request?: Request; path?: string; context?: unknown },
 ): Promise<{ allowed: true } | { allowed: false; message: string }> {
-  if (!opts.modules || Object.keys(opts.modules).length === 0) {
+  if (opts.dynamicModules?.enabled !== true) {
+    return { allowed: true };
+  }
+
+  if (!ctx.context) {
     return { allowed: true };
   }
 
   const requestOrigin = getRequestOrigin(ctx);
-  const matched = resolveModule(opts.modules, requestOrigin, ctx.request);
+  const modules = await listEnabledModules(ctx as Parameters<typeof listEnabledModules>[0]);
+  if (modules.length === 0) return { allowed: true };
+  const matchedModule = requestOrigin
+    ? modules.find((m) => m.origins.includes(requestOrigin))
+    : undefined;
+  const matched: ResolvedModule | null = matchedModule
+    ? { key: matchedModule.key, denyMessage: matchedModule.denyMessage }
+    : null;
 
   if (!matched) {
     if ((opts.moduleUnmatchedBehavior ?? "allow") === "deny") {
@@ -114,10 +157,16 @@ async function checkModuleAccess(
     return { allowed: true };
   }
 
-  const userRoles = role.split(",").map((r) => r.trim());
-  const hasAllowed = typeof matched.allowedRoles === "function"
-    ? await matched.allowedRoles(userRoles)
-    : userRoles.some((r) => matched.allowedRoles.includes(r));
+  const roleNames = role.split(",").map((r) => r.trim()).filter(Boolean);
+  const acRoles: Record<string, Role> = {
+    ...defaultRoles,
+    ...(opts.roles ?? {}),
+  };
+  const hasStaticAccess = hasStaticModuleAccess(roleNames, acRoles, matched.key);
+  const hasAllowed = hasStaticAccess ||
+    (opts.dynamicRoles?.enabled
+      ? await hasDynamicModuleAccess(roleNames, ctx, matched.key)
+      : false);
 
   if (hasAllowed) return { allowed: true };
 
@@ -340,9 +389,8 @@ export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
           },
           handler: createAuthMiddleware(async (ctx) => {
             if (opts.enforceModulesOnSession === false) return;
-            if (!opts.modules || Object.keys(opts.modules).length === 0) return;
-
-            const response = await getEndpointResponse(ctx);
+            if (opts.dynamicModules?.enabled !== true) return;
+            const response = await getEndpointResponse(ctx) as { user: { role: string } };
             if (!response?.user) return;
 
             const moduleResult = await checkModuleAccess(
@@ -398,6 +446,11 @@ export const extendedAdmin = <O extends AdminOptions>(options?: O) => {
       deleteRole: deleteRole(opts),
       listRoles: listRoles(opts),
       getRole: getRole(opts),
+      createModule: createModule(opts),
+      updateModule: updateModule(opts),
+      deleteModule: deleteModule(opts),
+      listModules: listModules(opts),
+      getModule: getModule(opts),
     },
 
     $ERROR_CODES: ADMIN_ERROR_CODES,

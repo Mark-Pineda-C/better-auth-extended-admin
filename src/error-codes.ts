@@ -61,4 +61,10 @@ export const ADMIN_ERROR_CODES = defineErrorCodes({
   // --- Module-based access control ---
   MODULE_ACCESS_DENIED:
     "You are not allowed to login from this origin",
+  MODULE_NOT_FOUND: "Module not found",
+  MODULE_KEY_IS_ALREADY_TAKEN: "A module with that key already exists",
+  MODULE_IS_ASSIGNED_TO_ROLES:
+    "Cannot delete a module that is currently assigned to roles",
+  DYNAMIC_MODULES_DISABLED:
+    "Dynamic modules are disabled. Enable `dynamicModules.enabled` to use module endpoints.",
 });

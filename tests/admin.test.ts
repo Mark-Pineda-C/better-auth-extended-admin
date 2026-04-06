@@ -27,7 +27,7 @@ async function setupAdminAndUser() {
 // ─── setRole ──────────────────────────────────────────────────────────────────
 
 describe("setRole", () => {
-  test("admin puede cambiar el rol de otro usuario", async () => {
+  test("admin can change the role of another user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.setRole({
@@ -40,7 +40,7 @@ describe("setRole", () => {
     expect((res.data as unknown as { user: { role: string } })?.user?.role).toBe("admin");
   });
 
-  test("usuario sin permiso recibe error al intentar cambiar rol", async () => {
+  test("user without permission receives error when trying to change role", async () => {
     const { client, signInUser, regularUserId } = await setupAdminAndUser();
     const { headers } = await signInUser("regular@test.com", "password123");
 
@@ -54,7 +54,7 @@ describe("setRole", () => {
     expect(res.error?.status).toBe(403);
   });
 
-  test("setRole acepta un array de roles y los guarda separados por coma", async () => {
+  test("setRole accepts an array of roles and saves them separated by comma", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.setRole({
@@ -71,7 +71,7 @@ describe("setRole", () => {
 // ─── banUser / unbanUser ──────────────────────────────────────────────────────
 
 describe("banUser / unbanUser", () => {
-  test("admin puede banear un usuario", async () => {
+  test("admin can ban a user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.banUser({
@@ -84,7 +84,7 @@ describe("banUser / unbanUser", () => {
     expect((res.data as unknown as { user: { banned: boolean } })?.user?.banned).toBe(true);
   });
 
-  test("admin no puede banearse a sí mismo", async () => {
+  test("admin cannot ban themselves", async () => {
     const { client, adminHeaders, adminUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.banUser({
@@ -96,7 +96,7 @@ describe("banUser / unbanUser", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("admin puede desbanear un usuario previamente baneado", async () => {
+  test("admin can unban a previously banned user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     await client.extendedAdmin.banUser({
@@ -117,7 +117,7 @@ describe("banUser / unbanUser", () => {
 // ─── enableUser / disableUser ─────────────────────────────────────────────────
 
 describe("enableUser / disableUser", () => {
-  test("admin puede deshabilitar un usuario", async () => {
+  test("admin can disable a user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.disableUser({
@@ -129,7 +129,7 @@ describe("enableUser / disableUser", () => {
     expect((res.data as unknown as { user: { isActive: boolean } })?.user?.isActive).toBe(false);
   });
 
-  test("admin no puede deshabilitarse a sí mismo", async () => {
+  test("admin cannot disable themselves", async () => {
     const { client, adminHeaders, adminUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.disableUser({
@@ -141,7 +141,7 @@ describe("enableUser / disableUser", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("admin puede rehabilitar un usuario deshabilitado", async () => {
+  test("admin can reenable a disabled user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     await client.extendedAdmin.disableUser({
@@ -162,7 +162,7 @@ describe("enableUser / disableUser", () => {
 // ─── createUser ───────────────────────────────────────────────────────────────
 
 describe("createUser", () => {
-  test("admin puede crear un usuario con rol personalizado", async () => {
+  test("admin can create a user with a custom role", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.createUser({
@@ -178,7 +178,7 @@ describe("createUser", () => {
     expect((res.data as unknown as { user: { role: string } })?.user?.role).toBe("editor");
   });
 
-  test("crear usuario con email duplicado retorna error", async () => {
+  test("creating a user with a duplicate email returns an error", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     await client.extendedAdmin.createUser({
@@ -197,7 +197,7 @@ describe("createUser", () => {
     expect(res.error?.status).toBe(400);
   });
 
-  test("sin autenticación retorna 401", async () => {
+  test("without authentication returns 401", async () => {
     const { client } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.createUser({
@@ -214,7 +214,7 @@ describe("createUser", () => {
 // ─── listUsers ────────────────────────────────────────────────────────────────
 
 describe("listUsers", () => {
-  test("admin puede listar usuarios y obtiene total", async () => {
+  test("admin can list users and get total", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.listUsers({
@@ -229,7 +229,7 @@ describe("listUsers", () => {
     expect(data.total).toBeGreaterThanOrEqual(2);
   });
 
-  test("usuario sin permiso no puede listar usuarios", async () => {
+  test("user without permission cannot list users", async () => {
     const { client, signInUser } = await setupAdminAndUser();
     const { headers } = await signInUser("regular@test.com", "password123");
 
@@ -246,7 +246,7 @@ describe("listUsers", () => {
 // ─── getUser ──────────────────────────────────────────────────────────────────
 
 describe("getUser", () => {
-  test("admin puede obtener datos de un usuario por ID", async () => {
+  test("admin can get user data by ID", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.getUser({
@@ -258,7 +258,7 @@ describe("getUser", () => {
     expect((res.data as { id: string })?.id).toBe(regularUserId);
   });
 
-  test("retorna 404 para ID inexistente", async () => {
+  test("returns 404 for non-existent ID", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.getUser({
@@ -274,7 +274,7 @@ describe("getUser", () => {
 // ─── removeUser ───────────────────────────────────────────────────────────────
 
 describe("removeUser", () => {
-  test("admin puede eliminar un usuario", async () => {
+  test("admin can remove a user", async () => {
     const { client, adminHeaders, regularUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.removeUser({
@@ -286,7 +286,7 @@ describe("removeUser", () => {
     expect((res.data as { success: boolean })?.success).toBe(true);
   });
 
-  test("admin no puede eliminarse a sí mismo", async () => {
+  test("admin cannot remove themselves", async () => {
     const { client, adminHeaders, adminUserId } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.removeUser({
@@ -300,11 +300,11 @@ describe("removeUser", () => {
 });
 
 // ─── hasPermission ────────────────────────────────────────────────────────────
-// El endpoint está registrado en /extended-admin/has-permission, así que el método
-// del cliente es client.extendedAdmin.hasPermission (derivado del path, no de la clave).
+// The endpoint is registered in /extended-admin/has-permission, so the method
+// of the client is client.extendedAdmin.hasPermission (derived from the path, not the key).
 
 describe("hasPermission", () => {
-  test("admin tiene permiso para user:ban", async () => {
+  test("admin has permission for user:ban", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.hasPermission({
@@ -317,7 +317,7 @@ describe("hasPermission", () => {
     expect((res.data as { success: boolean })?.success).toBe(true);
   });
 
-  test("user regular no tiene permiso para user:ban", async () => {
+  test("regular user does not have permission for user:ban", async () => {
     const { client, signInUser } = await setupAdminAndUser();
     const { headers } = await signInUser("regular@test.com", "password123");
 
@@ -331,7 +331,7 @@ describe("hasPermission", () => {
     expect((res.data as { success: boolean })?.success).toBe(false);
   });
 
-  test("retorna 400 si se pasa permission (singular) en lugar de permissions", async () => {
+  test("returns 400 if permission (singular) is passed instead of permissions", async () => {
     const { client, adminHeaders } = await setupAdminAndUser();
 
     const res = await client.extendedAdmin.hasPermission({

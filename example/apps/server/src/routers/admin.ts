@@ -1,24 +1,14 @@
 import { router, adminProcedure } from "../trpc";
-import { DEFAULT_MODULE_ACCESS } from "../auth";
+import { DEFAULT_MODULE_ACCESS, DEFAULT_MODULES } from "../auth";
 
 export const adminRouter = router({
   getAdminConfig: adminProcedure.query(() => ({
     modules: [
-      {
-        key: "adminPanel",
-        name: "Admin Panel",
-        origin: "http://localhost:3001",
-      },
-      {
-        key: "editorPanel",
-        name: "Editor Panel",
-        origin: "http://localhost:3002",
-      },
-      {
-        key: "userPanel",
-        name: "User Panel",
-        origin: "http://localhost:3003",
-      },
+      ...DEFAULT_MODULES.map((m) => ({
+        key: m.key,
+        name: m.name,
+        origin: m.origins[0] ?? "",
+      })),
     ],
     staticRoles: ["admin", "editor", "user"],
     defaultModuleAccess: DEFAULT_MODULE_ACCESS,

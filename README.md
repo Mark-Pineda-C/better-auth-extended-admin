@@ -5,7 +5,7 @@ An extended admin plugin for [better-auth](https://better-auth.com) that builds 
 - **Dynamic role system** — create, update, and delete roles at runtime, stored in the database
 - **User activation / deactivation** — enable or disable accounts independently of the ban system
 - **Role on sign-up** — optionally allow users to specify a role during registration, or set a default sign-up role
-- **Module-based login access control** — restrict which roles can sign in or sign up from each frontend/origin
+- **Dynamic MBLAC (module-based login access control)** — modules are stored in the database and evaluated at runtime per request origin
 
 ---
 
@@ -56,6 +56,11 @@ export const auth = betterAuth({
       dynamicRoles: {
         enabled: true,
         maximumRoles: 50,
+      },
+
+      // Dynamic module system (disabled by default for admin-base compatibility)
+      dynamicModules: {
+        enabled: true,
       },
 
       // Allow users to pass a `role` field during sign-up
@@ -173,72 +178,68 @@ await authClient.extendedAdmin.createUser({
 
 ### 4. Module-based login access control
 
-When your auth backend serves multiple frontends (e.g. an admin panel, a customer portal, an internal tool), you can restrict which roles are allowed to sign in or sign up from each origin.
+Dynamic module checks are **opt-in** to preserve compatibility with the base admin plugin.
+Enable them explicitly:
 
 ```ts
 extendedAdmin({
-  defaultRole: "user",
-  roles: {
-    admin: adminAc,
-    user: userAc,
-    editor: editorAc,
-  },
-  modules: {
-    "admin-panel": {
-      origin: "https://admin.example.com",
-      allowedRoles: ["admin"],
-      denyMessage: "Only administrators can access this panel.",
-    },
-    "customer-portal": {
-      origin: "https://app.example.com",
-      allowedRoles: ["user", "editor"],
-    },
-  },
+  dynamicModules: { enabled: true },
 })
 ```
 
-A user with role `"editor"` trying to sign in from `https://admin.example.com` will receive a `FORBIDDEN` error. From `https://app.example.com`, the same user passes through normally.
+When enabled, modules are **database-backed**.  
+Access checks are performed on sign-in, sign-up, and (optionally) `getSession`:
 
-**Multiple origins per module** (useful for dev environments):
+1. Resolve module by request `Origin` using `globalModule.origins`.
+2. Read user role(s).
+3. Allow access if at least one role contains the module key in `permissions.module`.
 
-```ts
-modules: {
-  "admin-panel": {
-    origin: [
-      "https://admin.example.com",
-      "http://localhost:3001",
-    ],
-    allowedRoles: ["admin"],
-  },
-},
-```
-
-**Custom matching** for cases where the origin header is not enough (e.g. same domain, different modules identified by a custom header):
+You manage modules through the API:
 
 ```ts
-modules: {
-  "admin-panel": {
-    match: (request) => request.headers.get("x-app-module") === "admin",
-    allowedRoles: ["admin"],
+await authClient.extendedAdmin.createModule({
+  key: "admin-panel",
+  name: "Admin Panel",
+  origins: ["https://admin.example.com", "http://localhost:3001"],
+  denyMessage: "Only administrators can access this panel.",
+});
+
+await authClient.extendedAdmin.createRole({
+  name: "editor",
+  permissions: {
+    module: ["editor-panel"],
   },
-  "customer-portal": {
-    match: (request) => request.headers.get("x-app-module") === "portal",
-    allowedRoles: ["user", "editor"],
-  },
-},
+});
 ```
 
-**Unmatched origins** — by default, requests from origins that don't match any module are allowed. Set `moduleUnmatchedBehavior: "deny"` to block them:
+Use `moduleUnmatchedBehavior: "deny"` to block unknown origins:
 
 ```ts
 extendedAdmin({
-  modules: { /* ... */ },
   moduleUnmatchedBehavior: "deny",
   moduleDenyMessage: "Access is not allowed from this origin.",
-})
+});
 ```
 
-This feature applies to both **sign-in** and **sign-up**. During sign-up, the role that would be assigned to the new user is checked against the module's `allowedRoles`. If it doesn't match, the registration is blocked before the user is created. Users with multiple roles (comma-separated) are allowed if at least one of their roles is in the module's `allowedRoles`.
+### 5. Breaking changes (MBLAC)
+
+No breaking behavior for legacy users by default:
+- If `dynamicModules.enabled` is **not** set, module checks are skipped.
+- Existing admin flows continue to work without module-table dependencies.
+- Module endpoints return `NOT_IMPLEMENTED` until `dynamicModules.enabled: true`.
+
+With `dynamicModules.enabled: true`:
+- Module definitions come from `globalModule` records.
+- `permissions.module` values are validated against existing module keys.
+- Module CRUD endpoints become available.
+
+### 6. Compatibility modes
+
+| Mode | `dynamicRoles.enabled` | `dynamicModules.enabled` | Behavior |
+|---|---|---|---|
+| Legacy default | `false` or `true` | `false` (or omitted) | No module enforcement; module endpoints disabled |
+| Roles dynamic only | `true` | `false` (or omitted) | Dynamic role CRUD active; module checks still disabled |
+| Full dynamic | `true` or `false` | `true` | Module enforcement active + module endpoints enabled |
 
 ---
 
@@ -268,6 +269,11 @@ This feature applies to both **sign-in** and **sign-up**. During sign-up, the ro
 | `POST` | `/extended-admin/delete-role` | Delete a dynamic role |
 | `GET` | `/extended-admin/list-roles` | List all dynamic roles |
 | `GET` | `/extended-admin/get-role` | Get a dynamic role by name |
+| `POST` | `/extended-admin/create-module` | Create a dynamic module *(requires `dynamicModules.enabled`)* |
+| `POST` | `/extended-admin/update-module` | Update a dynamic module *(requires `dynamicModules.enabled`)* |
+| `POST` | `/extended-admin/delete-module` | Delete a dynamic module *(requires `dynamicModules.enabled`)* |
+| `GET` | `/extended-admin/list-modules` | List all dynamic modules *(requires `dynamicModules.enabled`)* |
+| `GET` | `/extended-admin/get-module` | Get a dynamic module by key *(requires `dynamicModules.enabled`)* |
 
 ---
 
@@ -280,6 +286,7 @@ This feature applies to both **sign-in** and **sign-up**. During sign-up, the ro
 | `roles` | `Record<string, Role>` | — | Custom static role definitions |
 | `ac` | `AccessControl` | — | Access control instance (required for dynamic roles) |
 | `dynamicRoles` | `{ enabled, maximumRoles? }` | — | Enable dynamic role system |
+| `dynamicModules` | `{ enabled }` | — | Enable module checks and module CRUD endpoints |
 | `allowRoleOnSignUp` | `boolean` | `false` | Accept `role` field from sign-up input |
 | `defaultRoleForSignUp` | `string` | — | Default role for sign-up (overrides `defaultRole`) |
 | `bannedUserMessage` | `string` | *See code* | Message for banned users |
@@ -290,9 +297,9 @@ This feature applies to both **sign-in** and **sign-up**. During sign-up, the ro
 | `adminUserIds` | `string[]` | — | User IDs that always have admin access |
 | `allowImpersonatingAdmins` | `boolean` | `false` | Allow impersonating other admins *(deprecated)* |
 | `schema` | `InferOptionSchema<AdminSchema>` | — | Override schema field names |
-| `modules` | `Record<string, ModuleConfig>` | — | Module-based login/sign-up access control by origin |
 | `moduleDenyMessage` | `string` | *See code* | Default message when access is denied by module |
 | `moduleUnmatchedBehavior` | `"allow" \| "deny"` | `"allow"` | Behavior when origin matches no module |
+| `enforceModulesOnSession` | `boolean` | `true` | Apply module checks on `getSession` responses |
 
 ---
 
@@ -324,6 +331,19 @@ The plugin adds the following fields and tables to your database:
 | `name` | `string` | Role name (lowercase, unique) |
 | `permissions` | `string` | JSON-serialized permission map |
 | `description` | `string` | Optional description |
+| `createdAt` | `date` | Creation timestamp |
+| `updatedAt` | `date` | Last update timestamp |
+
+**`globalModule` table** *(used when `dynamicModules.enabled`)*
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `string` | Primary key |
+| `key` | `string` | Unique module key (lowercase) |
+| `name` | `string` | Human-readable module name |
+| `origins` | `string` | JSON-serialized origin list |
+| `denyMessage` | `string` | Optional module-specific deny message |
+| `enabled` | `boolean` | Whether the module participates in access checks |
 | `createdAt` | `date` | Creation timestamp |
 | `updatedAt` | `date` | Last update timestamp |
 

@@ -4,6 +4,7 @@ import { ADMIN_ERROR_CODES } from "../error-codes";
 import { hasPermission, invalidateRoleCache } from "../has-permission";
 import { adminMiddleware } from "./admin-routes";
 import type { AdminOptions } from "../types";
+import { listAllModules, normalizeModuleKey } from "../module-store";
 import * as z from "zod";
 
 const DEFAULT_MAX_ROLES = Number.POSITIVE_INFINITY;
@@ -49,7 +50,7 @@ async function checkRoleNameConflictsWithDB(
   }
 }
 
-async function checkForInvalidResources(
+async function validatePermissionSet(
   permission: Record<string, string[]>,
   opts: AdminOptions,
   ctx: NonNullable<Parameters<typeof hasPermission>[1]>,
@@ -66,6 +67,55 @@ async function checkForInvalidResources(
     );
     throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_RESOURCE);
   }
+
+  const invalidActions: string[] = [];
+  for (const [resource, actions] of Object.entries(permission)) {
+    if (resource === "module") continue;
+    const allowedActions = opts.ac.statements[resource] ?? [];
+    invalidActions.push(
+      ...actions
+        .filter((a) => !allowedActions.includes(a))
+        .map((a) => `${resource}:${a}`),
+    );
+  }
+  if (invalidActions.length > 0) {
+    ctx.context.logger.error(
+      `[ExtendedAdmin] Invalid actions in permission set: ${invalidActions.join(", ")}`,
+    );
+    throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_PERMISSIONS);
+  }
+
+  const moduleRefs = permission.module ?? [];
+  if (moduleRefs.length > 0 && opts.dynamicModules?.enabled === true) {
+    const modules = await listAllModules(ctx);
+    const moduleKeys = new Set(modules.map((m) => m.key));
+    const invalidModuleRefs = moduleRefs
+      .map((key) => normalizeModuleKey(key))
+      .filter((key) => key !== "*" && !moduleKeys.has(key));
+    if (invalidModuleRefs.length > 0) {
+      ctx.context.logger.error(
+        `[ExtendedAdmin] Invalid module references in permission set: ${invalidModuleRefs.join(", ")}`,
+      );
+      throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_PERMISSIONS);
+    }
+  }
+}
+
+function normalizePermissionSet(
+  permission: Record<string, string[]>,
+): Record<string, string[]> {
+  const next: Record<string, string[]> = {};
+  for (const [resource, actions] of Object.entries(permission)) {
+    const normalizedActions = [...new Set(
+      actions
+        .map((action) =>
+          resource === "module" ? normalizeModuleKey(action) : action.trim()
+        )
+        .filter(Boolean),
+    )];
+    if (normalizedActions.length > 0) next[resource] = normalizedActions;
+  }
+  return next;
 }
 
 // ─── create-role ─────────────────────────────────────────────────────────────
@@ -113,9 +163,10 @@ export const createRole = (opts: AdminOptions) =>
 
       const body = ctx.body as z.infer<typeof createRoleBodySchema>;
       const roleName = normalizeRoleName(body.name);
+      const normalizedPermissions = normalizePermissionSet(body.permissions);
       await checkRoleNameConflictsWithStatic(roleName, opts, ctx);
       await checkRoleNameConflictsWithDB(roleName, ctx);
-      await checkForInvalidResources(body.permissions, opts, ctx);
+      await validatePermissionSet(normalizedPermissions, opts, ctx);
 
       const maxRoles =
         typeof opts.dynamicRoles?.maximumRoles === "number"
@@ -136,7 +187,7 @@ export const createRole = (opts: AdminOptions) =>
         model: "globalRole",
         data: {
           name: roleName,
-          permissions: JSON.stringify(body.permissions),
+          permissions: JSON.stringify(normalizedPermissions),
           description: body.description ?? null,
           createdAt: now,
           updatedAt: now,
@@ -149,7 +200,7 @@ export const createRole = (opts: AdminOptions) =>
         success: true,
         role: {
           ...created,
-          permissions: body.permissions,
+          permissions: normalizedPermissions,
         },
       });
     },
@@ -218,8 +269,9 @@ export const updateRole = (opts: AdminOptions) =>
       };
 
       if (body.data.permissions !== undefined) {
-        await checkForInvalidResources(body.data.permissions, opts, ctx);
-        updateData.permissions = JSON.stringify(body.data.permissions);
+        const normalizedPermissions = normalizePermissionSet(body.data.permissions);
+        await validatePermissionSet(normalizedPermissions, opts, ctx);
+        updateData.permissions = JSON.stringify(normalizedPermissions);
       }
 
       if (body.data.description !== undefined) {
@@ -243,7 +295,7 @@ export const updateRole = (opts: AdminOptions) =>
 
       const updatedPermissions =
         body.data.permissions !== undefined
-          ? body.data.permissions
+          ? normalizePermissionSet(body.data.permissions)
           : (JSON.parse(existing.permissions) as Record<string, string[]>);
 
       return ctx.json({

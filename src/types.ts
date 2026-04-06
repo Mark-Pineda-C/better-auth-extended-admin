@@ -14,32 +14,30 @@ export interface SessionWithImpersonatedBy extends Session {
   impersonatedBy?: string | undefined;
 }
 
-export interface ModuleConfig {
-  /**
-   * Origin(s) to match against the request `Origin` header.
-   * Can be a single string or an array for multiple origins (e.g. production + localhost).
-   */
-  origin?: string | string[] | undefined;
-  /**
-   * Custom matching function. Takes priority over `origin` when provided.
-   * Receives the raw `Request` object so you can inspect any header, path, query param, etc.
-   */
-  match?: ((request: Request) => boolean) | undefined;
-  /**
-   * Roles that are allowed to sign in / sign up from this module.
-   * For multi-role users (comma-separated), access is granted if at least one role matches.
-   *
-   * Can be a static array of role names or a callback that receives the user's
-   * roles (already split by comma) and returns whether access is allowed.
-   * The callback may be async, which is useful for querying dynamic roles from
-   * a database or external service.
-   */
-  allowedRoles: string[] | ((roles: string[]) => boolean | Promise<boolean>);
-  /**
-   * Custom deny message for this specific module.
-   * Falls back to the global `moduleDenyMessage` if not set.
-   */
+export interface DynamicModule {
+  key: string;
+  name: string;
+  origins: string[];
+  denyMessage?: string | null | undefined;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DynamicModuleCreateInput {
+  key: string;
+  name: string;
+  origins: string[];
   denyMessage?: string | undefined;
+  enabled?: boolean | undefined;
+}
+
+export interface DynamicModuleUpdateInput {
+  name?: string | undefined;
+  origins?: string[] | undefined;
+  denyMessage?: string | undefined;
+  enabled?: boolean | undefined;
+  newKey?: string | undefined;
 }
 
 export interface AdminOptions {
@@ -134,6 +132,19 @@ export interface AdminOptions {
     maximumRoles?: number | undefined;
   } | undefined;
   /**
+   * Configuration for dynamic module-based access control.
+   * When disabled (default), module checks are skipped and module CRUD endpoints
+   * are not available.
+   */
+  dynamicModules?: {
+    /**
+     * Enable dynamic module-based access control.
+     *
+     * @default false
+     */
+    enabled: boolean;
+  } | undefined;
+  /**
    * Allow users to specify a role during sign-up.
    * When enabled, the `role` field is accepted as user input on registration.
    *
@@ -145,15 +156,6 @@ export interface AdminOptions {
    * Falls back to `defaultRole` if not set.
    */
   defaultRoleForSignUp?: string | undefined;
-  /**
-   * Module-based login and sign-up access control.
-   * Map of module name to its configuration. Each module defines which origins
-   * it serves and which roles are allowed to authenticate from it.
-   *
-   * When a request origin matches a module, the user's role is checked against
-   * that module's `allowedRoles`. This applies to both sign-in and sign-up.
-   */
-  modules?: Record<string, ModuleConfig> | undefined;
   /**
    * Default message shown when a user is denied access due to module restrictions.
    *
@@ -173,7 +175,7 @@ export interface AdminOptions {
    * When enabled, a session retrieved from an origin whose module does not
    * allow the user's role will be returned as `null` (as if unauthenticated).
    *
-   * Only applies when `modules` is configured.
+   * Only applies when there are enabled modules in the database.
    *
    * @default true
    */

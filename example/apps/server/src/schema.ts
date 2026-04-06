@@ -68,3 +68,14 @@ export const globalRole = sqliteTable("global_role", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
+
+export const globalModule = sqliteTable("global_module", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull(),
+  name: text("name").notNull(),
+  origins: text("origins").notNull(),
+  denyMessage: text("deny_message"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});

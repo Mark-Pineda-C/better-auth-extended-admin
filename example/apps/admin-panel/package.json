@@ -2,7 +2,7 @@
   "name": "@example/admin-panel",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "portless admin-panel next dev",
     "build": "next build",
     "start": "next start -p 3001"
   },
