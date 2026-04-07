@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createTestInstance } from "./setup";
 import { defaultAc } from "../src/access";
+import { invalidateModuleCache } from "../src/module-store";
 
 // Para dynamic roles se requiere ac + dynamicRoles.enabled: true
 function createDynamicInstance() {
@@ -15,6 +16,24 @@ async function setupDynamicAdmin() {
   const instance = createDynamicInstance();
   const admin = await instance.createAdminUser();
   return { ...instance, adminHeaders: admin.headers };
+}
+
+function seedRawModuleWithMixedCase(
+  db: ReturnType<typeof createTestInstance>["db"],
+  key: string,
+) {
+  const table = db.globalModule as Array<Record<string, unknown>>;
+  table.push({
+    id: `mod-${key}-${Date.now()}-${Math.random()}`,
+    key,
+    name: key,
+    origins: JSON.stringify([`http://${key.toLowerCase()}.example.com`]),
+    denyMessage: null,
+    enabled: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  invalidateModuleCache();
 }
 
 // ─── createRole ───────────────────────────────────────────────────────────────
@@ -145,6 +164,22 @@ describe("createRole", () => {
     expect(res.error?.status).toBe(400);
   });
 
+  test("accepts permissions.module when DB module key casing differs", async () => {
+    const { client, adminHeaders, db } = await setupDynamicAdmin();
+    seedRawModuleWithMixedCase(db, "EditorPanel");
+
+    const res = await client.extendedAdmin.createRole({
+      name: "case-insensitive-module-ref",
+      permissions: { module: ["editorpanel"] },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    expect(res.error).toBeNull();
+    expect((res.data as { role: { name: string } })?.role?.name).toBe(
+      "case-insensitive-module-ref",
+    );
+  });
+
   test("legacy mode allows permissions.module without module table validation", async () => {
     const instance = createTestInstance({
       ac: defaultAc,
@@ -264,6 +299,29 @@ describe("updateRole", () => {
 
     expect(res.error).not.toBeNull();
     expect(res.error?.status).toBe(400);
+  });
+
+  test("accepts updateRole module refs when DB module key casing differs", async () => {
+    const { client, adminHeaders, db } = await setupDynamicAdmin();
+    seedRawModuleWithMixedCase(db, "UserPanel");
+
+    await client.extendedAdmin.createRole({
+      name: "update-case-insensitive",
+      permissions: { user: ["list"] },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    const res = await client.extendedAdmin.updateRole({
+      name: "update-case-insensitive",
+      data: { permissions: { module: ["userpanel"] } },
+      fetchOptions: { headers: Object.fromEntries(adminHeaders.entries()) },
+    });
+
+    expect(res.error).toBeNull();
+    const modulePerms = (
+      res.data as { role: { permissions: Record<string, string[]> } }
+    )?.role?.permissions?.module;
+    expect(modulePerms).toEqual(["userpanel"]);
   });
 });
 

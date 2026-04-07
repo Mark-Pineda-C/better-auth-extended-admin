@@ -1,6 +1,6 @@
 {
   "name": "better-auth-extended-admin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "An extended admin plugin for better-auth that adds dynamic role system, user activation / deactivation, role on sign-up, and module-based login access control.",
   "author": "Mark Pineda",
   "license": "MIT",

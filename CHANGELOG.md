@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 - 2026-04-06
+
+### Fixed
+- Fixed dynamic role permission validation for `permissions.module` to compare module keys case-insensitively against database records.
+- Fixed false `INVALID_PERMISSIONS` responses when module keys existed in `globalModule` with different casing.
+
+### Changed
+- Added regression tests for `createRole` and `updateRole` covering mixed-case module key scenarios.
+
+### Compatibility
+- Patch release only. No breaking API changes.
+
 ## 0.2.0 - 2026-04-06
 
 ### Added

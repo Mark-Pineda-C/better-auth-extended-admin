@@ -88,7 +88,7 @@ async function validatePermissionSet(
   const moduleRefs = permission.module ?? [];
   if (moduleRefs.length > 0 && opts.dynamicModules?.enabled === true) {
     const modules = await listAllModules(ctx);
-    const moduleKeys = new Set(modules.map((m) => m.key));
+    const moduleKeys = new Set(modules.map((m) => normalizeModuleKey(m.key)));
     const invalidModuleRefs = moduleRefs
       .map((key) => normalizeModuleKey(key))
       .filter((key) => key !== "*" && !moduleKeys.has(key));
