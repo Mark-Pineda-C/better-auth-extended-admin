@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 - 2026-04-07
+
+### Fixed
+- Fixed declaration emit compatibility for consumers exporting `auth` by exporting the `StoredModule` type in the public API.
+- Fixed TypeScript `ts(4023)` (`Exported variable 'auth' has or is using name 'StoredModule' ... but cannot be named`) in external projects using this plugin.
+
+### Compatibility
+- Patch release only. No runtime or behavior changes.
+
 ## 0.2.1 - 2026-04-06
 
 ### Fixed

@@ -23,6 +23,7 @@ export type {
   UserWithRole,
   InferAdminRolesFromOption,
 } from "./src/types";
+export type { StoredModule } from "./src/module-store";
 
 // Schema
 export { schema } from "./src/schema";
