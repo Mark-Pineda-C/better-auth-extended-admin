@@ -8,9 +8,9 @@ import { createTRPCContext } from "./trpc";
 const app = new Hono();
 
 const FRONTEND_ORIGINS = [
-  "http://localhost:3001",
-  "http://localhost:3002",
-  "http://localhost:3003",
+  "http://admin-panel.localhost:1355",
+  "http://editor-panel.localhost:1355",
+  "http://user-panel.localhost:1355",
 ];
 
 app.use(

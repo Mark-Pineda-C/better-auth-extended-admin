@@ -9,8 +9,8 @@ export default function Home() {
           Solo usuarios con rol <strong>admin</strong> pueden acceder a este panel.
         </p>
         <div className="module-info">
-          🔐 <strong>Módulo:</strong> <code>adminPanel</code> — origen{" "}
-          <code>http://localhost:3001</code> — roles permitidos:{" "}
+          🔐 <strong>Módulo:</strong> <code>adminpanel</code> — origen{" "}
+          <code>http://admin-panel.localhost:1355</code> — roles permitidos:{" "}
           <code>admin</code>
         </div>
         <div className="form">

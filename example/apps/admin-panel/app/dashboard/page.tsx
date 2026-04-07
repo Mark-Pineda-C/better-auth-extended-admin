@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc-client";
 type AdminStats = {
   message: string;
   capabilities: string[];
-  role: string;
+  role?: string | null;
 };
 
 type Profile = {

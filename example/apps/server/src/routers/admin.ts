@@ -3,13 +3,11 @@ import { DEFAULT_MODULE_ACCESS, DEFAULT_MODULES } from "../auth";
 
 export const adminRouter = router({
   getAdminConfig: adminProcedure.query(() => ({
-    modules: [
-      ...DEFAULT_MODULES.map((m) => ({
-        key: m.key,
-        name: m.name,
-        origin: m.origins[0] ?? "",
-      })),
-    ],
+    modules: DEFAULT_MODULES.map((m) => ({
+      key: m.key,
+      name: m.name,
+      origin: m.origins[0] ?? "",
+    })),
     staticRoles: ["admin", "editor", "user"],
     defaultModuleAccess: DEFAULT_MODULE_ACCESS,
     availablePermissions: {
@@ -29,7 +27,7 @@ export const adminRouter = router({
       ],
       session: ["list", "revoke", "delete"],
       role: ["create", "read", "update", "delete", "list"],
-      module: ["adminPanel", "editorPanel", "userPanel"],
+      module: DEFAULT_MODULES.map((m) => m.key),
     },
   })),
 });

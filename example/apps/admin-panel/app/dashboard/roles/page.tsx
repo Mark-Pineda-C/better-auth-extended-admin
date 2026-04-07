@@ -215,7 +215,8 @@ export default function RolesPage() {
         <div className="card-header">
           <h2>Roles estáticos</h2>
           <span className="subtitle" style={{ marginBottom: 0 }}>
-            Definidos en la configuración del servidor (no editables)
+            Definidos en el servidor (no editables). El acceso a paneles se
+            deriva de `permissions.module`.
           </span>
         </div>
         <table className="table">
@@ -255,7 +256,8 @@ export default function RolesPage() {
           <div>
             <h2>Roles dinámicos</h2>
             <span className="subtitle" style={{ marginBottom: 0 }}>
-              Roles creados desde el panel de administración
+              Roles creados desde el panel de administración. Los módulos
+              seleccionados se guardan en `permissions.module`.
             </span>
           </div>
           {!showForm && (
@@ -297,6 +299,9 @@ export default function RolesPage() {
 
             <div className="form-section">
               <label>Acceso a módulos</label>
+              <p className="text-muted" style={{ marginTop: 4 }}>
+                Los módulos provienen de la configuración dinámica del servidor.
+              </p>
               <div className="checkbox-group">
                 {config.modules.map((mod) => (
                   <label key={mod.key} className="checkbox-label">

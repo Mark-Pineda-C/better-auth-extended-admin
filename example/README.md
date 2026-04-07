@@ -1,37 +1,39 @@
 # better-auth-extended-admin — Monorepo Example
 
-This example demonstrates module-based login access control (`modules`) using `better-auth-extended-admin` in a monorepo with 4 applications.
+This example demonstrates module-based login access control for `better-auth-extended-admin` v0.2.0 using dynamic modules stored in the database.
 
 ## Apps
 
-| App | Framework | Port | Allowed roles (sign-in) | Assigned role (sign-up) |
+| App | Framework | URL (dev) | Allowed roles (sign-in) | Assigned role (sign-up) |
 |-----|-----------|------|------------------------|------------------------|
-| `server` | Hono + tRPC | 3000 | — | — |
-| `admin-panel` | Next.js 15 | 3001 | `admin` | `admin` |
-| `editor-panel` | TanStack Start | 3002 | `admin`, `editor` | `editor` |
-| `user-panel` | SolidStart | 3003 | `admin`, `user` | `user` |
+| `server` | Hono + tRPC | `http://localhost:3000` | — | — |
+| `admin-panel` | Next.js 15 | `http://admin-panel.localhost:1355` | `admin` | `admin` |
+| `editor-panel` | TanStack Start | `http://editor-panel.localhost:1355` | `admin`, `editor` | `editor` |
+| `user-panel` | SolidStart | `http://user-panel.localhost:1355` | `admin`, `user` | `user` |
 
 ## How it works
 
-The server configures `extendedAdmin` with `modules`, mapping each `Origin` header to the allowed roles:
+The server enables dynamic modules explicitly:
 
 ```ts
 extendedAdmin({
   allowRoleOnSignUp: true,
   moduleUnmatchedBehavior: "deny",
-  modules: {
-    adminPanel:  { origin: "http://localhost:3001", allowedRoles: ["admin"] },
-    editorPanel: { origin: "http://localhost:3002", allowedRoles: ["admin", "editor"] },
-    userPanel:   { origin: "http://localhost:3003", allowedRoles: ["admin", "user"] },
-  },
+  dynamicRoles: { enabled: true },
+  dynamicModules: { enabled: true },
 })
 ```
 
-Each frontend hardcodes its role in the sign-up form body. The plugin validates it against the matched module:
+Module definitions are seeded into `globalModule` at server startup (`example/apps/server/src/auth.ts`), and role access is evaluated through `permissions.module`.
 
-- Sign-up from `:3001` with `role: "admin"` → `"admin" ∈ allowedRoles` ✓
-- Sign-up from `:3001` with `role: "user"` → `"user" ∉ allowedRoles` → **blocked** ✓
-- Sign-in from `:3002` with role `user` → `"user" ∉ allowedRoles` → **403 Forbidden** ✓
+- Sign-up from `admin-panel.localhost:1355` with `role: "admin"` -> allowed
+- Sign-up from `admin-panel.localhost:1355` with `role: "user"` -> blocked (403)
+- Sign-in from `editor-panel.localhost:1355` with role `user` -> blocked (403)
+
+### Legacy vs dynamic mode
+
+- **Legacy mode (default):** if `dynamicModules.enabled` is omitted/false, module checks are skipped.
+- **Dynamic mode (this example):** `dynamicModules.enabled: true` turns on module checks and module CRUD endpoints.
 
 ## Requirements
 
@@ -91,10 +93,22 @@ bun run dev
 
 ## Testing the access control
 
-1. Open `http://localhost:3001` → sign up as **admin**
-2. Open `http://localhost:3002` → sign up as **editor**
-3. Open `http://localhost:3003` → sign up as **user**
+1. Open `http://admin-panel.localhost:1355` -> sign up as **admin**
+2. Open `http://editor-panel.localhost:1355` -> sign up as **editor**
+3. Open `http://user-panel.localhost:1355` -> sign up as **user**
 4. Try signing in with the wrong role (e.g. an editor in the admin-panel) → server returns 403 with a descriptive message
+
+## Database reset / reseed (optional)
+
+To reset module data and reseed defaults:
+
+```bash
+cd apps/server
+rm -f local.db
+bunx drizzle-kit push
+```
+
+Then restart the server. On startup, it seeds default modules (`adminpanel`, `editorpanel`, `userpanel`) into `globalModule` if missing.
 
 ## Environment variables
 

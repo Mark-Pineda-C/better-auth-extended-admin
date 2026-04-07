@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "portless user-panel vinxi dev",
+    "dev": "portless run --name user-panel vinxi dev",
     "build": "vinxi build",
     "start": "vinxi start"
   },

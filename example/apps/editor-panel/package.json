@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "portless editor-panel vite dev",
+    "dev": "portless run --name editor-panel vite dev",
     "build": "vite build",
     "start": "node .output/server/index.mjs"
   },

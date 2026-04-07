@@ -34,7 +34,7 @@ export default function UsersPage() {
         }),
         authClient.extendedAdmin.listRoles(),
       ]);
-      setUsers((usersRes.data?.users ?? []) as User[]);
+      setUsers((usersRes.data?.users ?? []) as unknown as User[]);
 
       const dynamicNames = ((rolesRes.data ?? []) as DynamicRole[]).map(
         (r) => r.name,

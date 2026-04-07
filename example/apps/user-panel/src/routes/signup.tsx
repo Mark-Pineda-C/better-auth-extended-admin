@@ -20,7 +20,7 @@ export default function Signup() {
       email: email(),
       password: password(),
       // allowRoleOnSignUp: true en el servidor permite enviar el rol.
-      // El módulo userPanel (origin:3003) tiene allowedRoles: ["admin", "user"].
+      // El módulo userpanel (origin:user-panel.localhost:1355) permite admin y user.
       // @ts-expect-error — campo añadido por allowRoleOnSignUp
       role: "user",
     });
@@ -42,7 +42,7 @@ export default function Signup() {
         <div class="module-info">
           Las cuentas creadas desde este panel reciben el rol{" "}
           <strong>user</strong>. El servidor valida que{" "}
-          <code>http://localhost:3003</code> solo permite roles{" "}
+          <code>http://user-panel.localhost:1355</code> solo permite roles{" "}
           <code>admin</code> y <code>user</code>.
         </div>
         <form onSubmit={handleSubmit} class="form">

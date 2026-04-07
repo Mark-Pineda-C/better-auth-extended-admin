@@ -13,7 +13,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Editor Panel" },
+      { title: "Editor Panel — better-auth-extended-admin example" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),

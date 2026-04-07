@@ -24,7 +24,7 @@ function SignupPage() {
       email,
       password,
       // allowRoleOnSignUp: true en el servidor permite enviar el rol.
-      // El módulo editorPanel (origin:3002) tiene allowedRoles: ["admin", "editor"].
+      // El módulo editorpanel (origin:editor-panel.localhost:1355) permite admin y editor.
       // @ts-expect-error — campo añadido por allowRoleOnSignUp
       role: "editor",
     });
@@ -46,7 +46,7 @@ function SignupPage() {
         <div className="module-info">
           Las cuentas creadas desde este panel reciben el rol{" "}
           <strong>editor</strong>. El servidor valida que{" "}
-          <code>http://localhost:3002</code> solo permite roles{" "}
+          <code>http://editor-panel.localhost:1355</code> solo permite roles{" "}
           <code>admin</code> y <code>editor</code>.
         </div>
         <form onSubmit={handleSubmit} className="form">

@@ -14,8 +14,8 @@ function HomePage() {
           pueden acceder a este panel.
         </p>
         <div className="module-info">
-          🖊 <strong>Módulo:</strong> <code>editorPanel</code> — origen{" "}
-          <code>http://localhost:3002</code> — roles permitidos:{" "}
+          🖊 <strong>Módulo:</strong> <code>editorpanel</code> — origen{" "}
+          <code>http://editor-panel.localhost:1355</code> — roles permitidos:{" "}
           <code>admin</code>, <code>editor</code>
         </div>
         <div className="form">

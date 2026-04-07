@@ -10,8 +10,8 @@ export default function Home() {
           acceder a este panel.
         </p>
         <div class="module-info">
-          👤 <strong>Módulo:</strong> <code>userPanel</code> — origen{" "}
-          <code>http://localhost:3003</code> — roles permitidos:{" "}
+          👤 <strong>Módulo:</strong> <code>userpanel</code> — origen{" "}
+          <code>http://user-panel.localhost:1355</code> — roles permitidos:{" "}
           <code>admin</code>, <code>user</code>
         </div>
         <div class="form">

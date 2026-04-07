@@ -23,7 +23,7 @@ export default function SignupPage() {
       email,
       password,
       // allowRoleOnSignUp: true en el servidor permite enviar el rol.
-      // El módulo adminPanel (origin:3001) tiene allowedRoles: ["admin"],
+      // El módulo adminpanel (origin:admin-panel.localhost:1355) permite rol admin.
       // por lo que solo se puede crear con rol "admin" desde este origen.
       // @ts-expect-error — campo añadido por allowRoleOnSignUp
       role: "admin",
@@ -46,7 +46,7 @@ export default function SignupPage() {
         <div className="module-info">
           Las cuentas creadas desde este panel reciben el rol{" "}
           <strong>admin</strong> automáticamente. El servidor valida que el
-          origen <code>http://localhost:3001</code> solo permite dicho rol.
+          origen <code>http://admin-panel.localhost:1355</code> solo permite dicho rol.
         </div>
         <form onSubmit={handleSubmit} className="form">
           <input
