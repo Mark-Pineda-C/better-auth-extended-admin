@@ -2,7 +2,9 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { bearer } from "better-auth/plugins/bearer";
 import { createAuthClient } from "better-auth/client";
+import { usernameClient } from "better-auth/client/plugins";
 import { parseSetCookieHeader } from "better-auth/cookies";
+import { username } from "better-auth/plugins/username";
 import { extendedAdmin } from "../src/extended-admin";
 import { extendedAdminClient } from "../src/client";
 import type { AdminOptions } from "../src/types";
@@ -41,7 +43,7 @@ export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: Ad
     emailAndPassword: { enabled: true },
     rateLimit: { enabled: false },
     logger: { level: "error" as const },
-    plugins: [bearer(), extendedAdmin({ adminRoles: ["admin"], ...options })],
+    plugins: [bearer(), username(), extendedAdmin({ adminRoles: ["admin"], ...options })],
   });
 
   const customFetch = (url: string | URL | Request, init?: RequestInit): Promise<Response> =>
@@ -50,7 +52,7 @@ export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: Ad
   const client = createAuthClient({
     baseURL: `${BASE_URL}/api/auth`,
     fetchOptions: { customFetchImpl: customFetch as never },
-    plugins: [extendedAdminClient()],
+    plugins: [usernameClient(), extendedAdminClient()],
   });
 
   async function signUpUser(email: string, password: string, name: string, extraHeaders?: Headers | string[][] | Record<string, string>) {
@@ -89,6 +91,54 @@ export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: Ad
     return { data: res.data, headers };
   }
 
+  async function signUpUserWithUsername(
+    email: string,
+    password: string,
+    name: string,
+    usernameValue: string,
+    extraHeaders?: Headers | string[][] | Record<string, string>,
+  ) {
+    const headers = new Headers(extraHeaders);
+    const res = await client.signUp.email({
+      email,
+      password,
+      name,
+      username: usernameValue,
+      fetchOptions: {
+        headers: Object.fromEntries(headers.entries()),
+        onSuccess(context) {
+          const cookie = parseSetCookieHeader(
+            context.response.headers.get("set-cookie") ?? "",
+          ).get("better-auth.session_token")?.value;
+          if (cookie) headers.set("cookie", `better-auth.session_token=${cookie}`);
+        },
+      },
+    });
+    return { data: res.data, headers, error: res.error };
+  }
+
+  async function signInUserByUsername(
+    usernameValue: string,
+    password: string,
+    extraHeaders?: Headers | string[][] | Record<string, string>,
+  ) {
+    const headers = new Headers(extraHeaders);
+    const res = await client.signIn.username({
+      username: usernameValue,
+      password,
+      fetchOptions: {
+        headers: Object.fromEntries(headers.entries()),
+        onSuccess(context) {
+          const cookie = parseSetCookieHeader(
+            context.response.headers.get("set-cookie") ?? "",
+          ).get("better-auth.session_token")?.value;
+          if (cookie) headers.set("cookie", `better-auth.session_token=${cookie}`);
+        },
+      },
+    });
+    return { data: res.data, headers, error: res.error };
+  }
+
   /**
    * Creates an admin user, signs in, and returns headers with session cookie.
    * The user is set to role "admin" via a direct DB update after sign-up.
@@ -117,7 +167,9 @@ export function createTestInstance(options: Omit<AdminOptions, "ac"> & { ac?: Ad
     db,
     customFetch,
     signUpUser,
+    signUpUserWithUsername,
     signInUser,
+    signInUserByUsername,
     createAdminUser,
   };
 }
